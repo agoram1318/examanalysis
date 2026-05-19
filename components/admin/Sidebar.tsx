@@ -36,7 +36,7 @@ const NAV: NavItem[] = [
   },
   { label: '학생 관리',    href: '/students',    icon: Users },
   { label: '반 관리',      href: '/classes',     icon: GraduationCap },
-  { label: '단원 관리',    href: '/curriculum',  icon: BookMarked },
+  { label: '단원 관리',    href: '/units',       icon: BookMarked },
 ];
 
 export default function AdminSidebar() {

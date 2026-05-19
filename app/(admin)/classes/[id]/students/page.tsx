@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, UserPlus, Users, ChevronRight, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
+import { ArrowLeft, UserPlus, Users, ChevronRight, AlertCircle, Loader2, ArrowRight, PenLine, FileBarChart } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -299,10 +299,10 @@ export default function StudentsPage({
                 </p>
               </div>
             ) : (
-              <table className="w-full text-sm">
+                <table className="w-full text-sm">
                 <thead style={{ background: 'var(--bg-base)' }}>
                   <tr>
-                    {['코드', '학생명', '등록일'].map((h) => (
+                    {['코드', '학생명', '등록일', ''].map((h) => (
                       <th
                         key={h}
                         className="px-5 py-3 text-left text-xs font-semibold"
@@ -347,6 +347,20 @@ export default function StudentsPage({
                         style={{ color: 'var(--fg-muted)' }}
                       >
                         {formatDate(s.created_at)}
+                      </td>
+                      <td className="px-5 py-2.5">
+                        <div className="flex items-center gap-2 justify-end">
+                          <Link href={`/classes/${classId}/answers`}>
+                            <Button size="sm" variant="ghost">
+                              <PenLine size={13} /> 답안 입력
+                            </Button>
+                          </Link>
+                          <Link href={`/students/${s.id}/report`}>
+                            <Button size="sm" variant="outline">
+                              <FileBarChart size={13} /> 리포트
+                            </Button>
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}

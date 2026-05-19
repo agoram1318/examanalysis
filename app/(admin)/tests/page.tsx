@@ -123,6 +123,11 @@ export default function TestsPage() {
                         <Users size={14} /> 반 생성
                       </Button>
                     </Link>
+                    <Link href={`/tests/${test.id}/classes`}>
+                      <Button size="sm" variant="accent">
+                        <Users size={14} /> 반 목록
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               </div>

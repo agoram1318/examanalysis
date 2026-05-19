@@ -86,27 +86,55 @@ const MENUS: MenuCard[] = [
   },
 ];
 
+type ClassRow = {
+  id: number;
+  class_name: string | null;
+  test_id: number;
+  created_at: string;
+  tests: { title: string } | null;
+};
+
 export default function AdminDashboardPage() {
-  const [recentTests, setRecentTests] = useState<TestRow[]>([]);
-  const [testCount, setTestCount] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
+  const [recentTests, setRecentTests]   = useState<TestRow[]>([]);
+  const [recentClasses, setRecentClasses] = useState<ClassRow[]>([]);
+  const [testCount, setTestCount]       = useState<number>(0);
+  const [classCount, setClassCount]     = useState<number>(0);
+  const [studentCount, setStudentCount] = useState<number>(0);
+  const [answerCount, setAnswerCount]   = useState<number>(0);
+  const [loading, setLoading]           = useState(true);
 
   useEffect(() => {
     async function loadData() {
-      // 전체 테스트 수 (count)
-      const { count } = await supabase
-        .from('tests')
-        .select('*', { count: 'exact', head: true });
+      const [
+        testsCount,
+        classesCount,
+        studentsCount,
+        answersCount,
+        recentTestsRes,
+        recentClassesRes,
+      ] = await Promise.all([
+        supabase.from('tests').select('*', { count: 'exact', head: true }),
+        supabase.from('classes').select('*', { count: 'exact', head: true }),
+        supabase.from('students').select('*', { count: 'exact', head: true }),
+        supabase.from('student_answers').select('student_id', { count: 'exact', head: true }),
+        supabase
+          .from('tests')
+          .select('id, title, school_name, grade, total_questions, created_at')
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('classes')
+          .select('id, class_name, test_id, created_at, tests(title)')
+          .order('created_at', { ascending: false })
+          .limit(4),
+      ]);
 
-      // 최근 테스트 5개
-      const { data } = await supabase
-        .from('tests')
-        .select('id, title, school_name, grade, total_questions, created_at')
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      setTestCount(count ?? 0);
-      setRecentTests(data ?? []);
+      setTestCount(testsCount.count ?? 0);
+      setClassCount(classesCount.count ?? 0);
+      setStudentCount(studentsCount.count ?? 0);
+      setAnswerCount(answersCount.count ?? 0);
+      setRecentTests(recentTestsRes.data ?? []);
+      setRecentClasses((recentClassesRes.data ?? []) as unknown as ClassRow[]);
       setLoading(false);
     }
     loadData();
@@ -121,21 +149,21 @@ export default function AdminDashboardPage() {
     },
     {
       icon: GraduationCap,
-      label: '분석 중인 반',
-      value: '–',
-      sub: '운영 반 수',
+      label: '운영 중인 반',
+      value: loading ? '–' : classCount,
+      sub: '전체 반 수',
     },
     {
       icon: Users,
       label: '등록 학생 수',
-      value: '–',
+      value: loading ? '–' : studentCount,
       sub: '전체 학생',
     },
     {
       icon: ClipboardCheck,
-      label: '완료된 분석',
-      value: '–',
-      sub: '채점 완료 테스트',
+      label: '입력된 답안',
+      value: loading ? '–' : answerCount,
+      sub: '전체 답안 수',
       accent: true,
     },
   ];
@@ -199,10 +227,10 @@ export default function AdminDashboardPage() {
         ))}
       </div>
 
-      {/* ── 주요 메뉴 카드 6개 + 최근 테스트 ── */}
-      <div className="grid grid-cols-3 gap-5">
+      {/* ── 주요 메뉴 카드 + 최근 테스트/반 ── */}
+      <div className="grid grid-cols-4 gap-5">
 
-        {/* 메뉴 카드 6개 (2×3 그리드로 왼쪽 2열 차지) */}
+        {/* 메뉴 카드 (왼쪽 2열) */}
         <div className="col-span-2 grid grid-cols-2 gap-4">
           {MENUS.map((menu) => (
             <Link
@@ -304,11 +332,11 @@ export default function AdminDashboardPage() {
                       </p>
                     </div>
                     <Link
-                      href={`/tests/${test.id}/questions`}
+                      href={`/tests/${test.id}/classes`}
                       className="shrink-0 text-xs px-2 py-1 rounded-md font-medium transition-colors hover:opacity-80"
                       style={{ background: 'var(--accent-lt)', color: 'var(--accent)' }}
                     >
-                      문항
+                      반 목록
                     </Link>
                   </div>
                 );
@@ -328,6 +356,90 @@ export default function AdminDashboardPage() {
             >
               <ClipboardList size={15} />
               새 테스트 등록하기
+            </Link>
+          </div>
+        </div>
+
+        {/* 최근 반 패널 */}
+        <div
+          className="rounded-xl border flex flex-col"
+          style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
+        >
+          <div
+            className="flex items-center justify-between px-5 py-4 border-b"
+            style={{ borderColor: 'var(--border)' }}
+          >
+            <span className="font-semibold text-sm" style={{ color: 'var(--fg-main)' }}>
+              최근 반
+            </span>
+            <Link
+              href="/classes"
+              className="flex items-center gap-1 text-xs font-medium transition-colors hover:opacity-70"
+              style={{ color: 'var(--accent)' }}
+            >
+              전체보기 <ArrowRight size={12} />
+            </Link>
+          </div>
+
+          <div className="flex-1 flex flex-col divide-y" style={{ borderColor: 'var(--border)' }}>
+            {loading ? (
+              <div className="flex-1 flex items-center justify-center py-10">
+                <Loader2 size={20} className="animate-spin" style={{ color: 'var(--fg-muted)' }} />
+              </div>
+            ) : recentClasses.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center py-10 px-5 text-center">
+                <GraduationCap size={28} className="mb-2 opacity-20" style={{ color: 'var(--fg-muted)' }} />
+                <p className="text-sm" style={{ color: 'var(--fg-muted)' }}>
+                  아직 생성된 반이 없습니다.
+                </p>
+              </div>
+            ) : (
+              recentClasses.map((cls) => (
+                <div key={cls.id} className="flex items-start gap-3 px-5 py-3.5">
+                  <div
+                    className="mt-1.5 w-2 h-2 rounded-full shrink-0"
+                    style={{ background: '#60a5fa' }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--fg-main)' }}>
+                      {cls.class_name || '이름 없는 반'}
+                    </p>
+                    <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--fg-muted)' }}>
+                      {cls.tests?.title ?? '–'} · {formatDate(cls.created_at)}
+                    </p>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <Link
+                      href={`/classes/${cls.id}/answers`}
+                      className="text-xs px-2 py-1 rounded-md font-medium hover:opacity-80"
+                      style={{ background: 'var(--accent-lt)', color: 'var(--accent)' }}
+                    >
+                      답안
+                    </Link>
+                    <Link
+                      href={`/classes/${cls.id}/analysis`}
+                      className="text-xs px-2 py-1 rounded-md font-medium hover:opacity-80"
+                      style={{ background: '#eff6ff', color: '#2563eb' }}
+                    >
+                      분석
+                    </Link>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div
+            className="px-5 py-4 border-t"
+            style={{ borderColor: 'var(--border)' }}
+          >
+            <Link
+              href="/tests"
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 border"
+              style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--fg-main)' }}
+            >
+              <GraduationCap size={15} />
+              테스트에서 반 생성하기
             </Link>
           </div>
         </div>
