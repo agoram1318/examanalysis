@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
 import Badge from '@/components/ui/Badge';
-import { Printer, BarChart3, TrendingUp, TrendingDown, Users, Award } from 'lucide-react';
+import { Printer, BarChart3 } from 'lucide-react';
 import {
   getTests, getTestById, getQuestionsByTest, getAnswersByTest, getClasses
 } from '@/lib/store';

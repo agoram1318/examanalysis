@@ -504,7 +504,7 @@ export default function QuestionsPage({
             </span>
           </span>
           <Button variant="accent" onClick={handleSave} loading={saving} disabled={saving}>
-            <Save size={15} /> 저장 후 다음
+            <Save size={15} /> 저장 후 반 생성
           </Button>
         </div>
       </div>

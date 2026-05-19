@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { Plus, ClipboardList, Edit2, Users, Loader2 } from 'lucide-react';
+import { Plus, ClipboardList, Edit2, Users, Loader2, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/utils';
 
@@ -52,6 +52,28 @@ export default function TestsPage() {
           </Button>
         </Link>
       </div>
+
+      {/* ── 워크플로 안내 ── */}
+      {!loading && tests.length > 0 && (
+        <div
+          className="rounded-xl border px-5 py-3 flex flex-wrap items-center gap-2 text-xs"
+          style={{ background: 'var(--bg-card)', borderColor: 'var(--border)', color: 'var(--fg-muted)' }}
+        >
+          <span className="font-semibold" style={{ color: 'var(--fg-main)' }}>다음 단계:</span>
+          {['문항 입력', '반 생성', '학생 등록', '답안 입력', '분석표'].map((s, i, arr) => (
+            <span key={s} className="flex items-center gap-1">
+              <span
+                className="px-2 py-0.5 rounded-full font-medium"
+                style={{ background: 'var(--accent-lt)', color: 'var(--accent)' }}
+              >
+                {s}
+              </span>
+              {i < arr.length - 1 && <ChevronRight size={12} />}
+            </span>
+          ))}
+          <span className="ml-1">버튼을 눌러 각 테스트를 관리하세요.</span>
+        </div>
+      )}
 
       {/* ── 로딩 ── */}
       {loading ? (

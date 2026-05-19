@@ -3,19 +3,30 @@
 import { usePathname } from 'next/navigation';
 import { Bell } from 'lucide-react';
 
-const PAGE_TITLES: Record<string, string> = {
-  '/admin':             '대시보드',
-  '/tests':             '테스트 관리',
-  '/answers':           '답안 입력',
-  '/analysis/student':  '학생별 분석표',
-  '/analysis/class':    '반 전체 분석표',
-  '/students':          '학생 관리',
-  '/classes':           '반 관리',
-  '/curriculum':        '단원 관리',
-};
+const PAGE_TITLES: [string, string][] = [
+  ['/admin',               '대시보드'],
+  ['/tests/new',           '새 테스트 등록'],
+  ['/tests',               '테스트 관리'],
+  ['/units',               '단원 관리'],
+  ['/classes',             '반 관리'],
+  ['/students',            '학생 관리'],
+  ['/answers',             '답안 입력'],
+  ['/analysis/student',    '학생별 분석표'],
+  ['/analysis/class',      '반 전체 분석표'],
+  ['/curriculum',          '커리큘럼 관리'],
+];
 
 function getTitle(pathname: string): string {
-  for (const [key, val] of Object.entries(PAGE_TITLES)) {
+  // 동적 세그먼트 매핑 (더 구체적인 것 먼저)
+  if (/\/tests\/\d+\/classes\/new/.test(pathname)) return '반 생성';
+  if (/\/tests\/\d+\/classes/.test(pathname)) return '반 목록';
+  if (/\/tests\/\d+\/questions/.test(pathname)) return '문항 정보 입력';
+  if (/\/classes\/\d+\/students/.test(pathname)) return '학생 등록';
+  if (/\/classes\/\d+\/answers/.test(pathname)) return '답안 입력';
+  if (/\/classes\/\d+\/analysis/.test(pathname)) return '반 전체 분석표';
+  if (/\/students\/\d+\/report/.test(pathname)) return '학생별 분석표';
+
+  for (const [key, val] of PAGE_TITLES) {
     if (pathname === key || pathname.startsWith(key + '/')) return val;
   }
   return '봉샘스쿨 분석 시스템';
@@ -27,6 +38,7 @@ export default function AdminHeader() {
 
   return (
     <header
+      data-admin-header
       className="flex items-center justify-between px-7 py-4 border-b bg-white"
       style={{ borderColor: 'var(--border)', minHeight: 60 }}
     >

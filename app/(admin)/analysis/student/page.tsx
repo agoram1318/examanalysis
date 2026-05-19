@@ -6,14 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
 import Badge from '@/components/ui/Badge';
-import { Printer, BarChart3, BookOpen, TrendingUp, TrendingDown, CheckCircle, XCircle, MinusCircle } from 'lucide-react';
+import { Printer, BarChart3, TrendingUp, TrendingDown, CheckCircle, XCircle } from 'lucide-react';
 import {
   getTests, getTestById, getQuestionsByTest, getStudentsByClass,
-  getAnswersByStudentAndTest, getAnswersByTest, getClasses, getChapters
+  getAnswersByStudentAndTest, getAnswersByTest
 } from '@/lib/store';
-import { buildStudentAnalysis, getGrade, getScoreColor, getAccuracyBadge } from '@/lib/analysis';
+import { buildStudentAnalysis, getGrade, getAccuracyBadge } from '@/lib/analysis';
 import { StudentAnalysis, Test, Student } from '@/lib/types';
-import { formatDate, formatPercentage, getDifficultyLabel } from '@/lib/utils';
+import { formatDate, formatPercentage } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import {
   RadarChart, PolarGrid, PolarAngleAxis, Radar,
@@ -31,7 +31,6 @@ function StudentAnalysisContent() {
   const [students, setStudents] = useState<Student[]>([]);
 
   const tests = getTests();
-  const classes = getClasses();
 
   useEffect(() => {
     if (!selectedTestId) return;
@@ -53,7 +52,6 @@ function StudentAnalysisContent() {
     const allStudents = getStudentsByClass(test.class_id);
     const student = allStudents.find(s => s.id === selectedStudentId);
     if (!student) return;
-    const cls = classes.find(c => c.id === test.class_id)!;
 
     const result = buildStudentAnalysis(student, test, questions, myAnswers, allAnswers, allStudents);
     setAnalysis(result);

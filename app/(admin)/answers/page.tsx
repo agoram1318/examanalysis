@@ -11,7 +11,7 @@ import { Save, CheckCircle, XCircle, MinusCircle, ArrowRight, Users } from 'luci
 import {
   getTests, getTestById, getQuestionsByTest, getStudentsByClass,
   getAnswersByStudentAndTest, saveAnswers, deleteAnswersByStudentAndTest,
-  generateId, getClasses
+  getClasses
 } from '@/lib/store';
 import { gradeStudentAnswers } from '@/lib/analysis';
 import { Test, Question, Student, Class } from '@/lib/types';
