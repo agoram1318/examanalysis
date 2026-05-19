@@ -5,11 +5,20 @@ import { useEffect, useState } from 'react';
 import {
   ClipboardList, GraduationCap, Users, BarChart3,
   ArrowRight, ClipboardCheck, PenLine, ListChecks,
-  FileBarChart, BookMarked, ChevronRight, TrendingUp,
+  FileBarChart, ChevronRight, TrendingUp, Loader2,
 } from 'lucide-react';
-import { getTests, getStudents, getClasses, getAnswersByTest } from '@/lib/store';
-import { Test, Student, Class } from '@/lib/types';
+import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/utils';
+
+// ── Supabase tests 행 타입 (필요한 컬럼만)
+type TestRow = {
+  id: number;
+  title: string;
+  school_name: string | null;
+  grade: string | null;
+  total_questions: number;
+  created_at: string;
+};
 
 // ── 통계 카드 데이터 타입
 type StatCard = {
@@ -71,52 +80,58 @@ const MENUS: MenuCard[] = [
 ];
 
 export default function AdminDashboardPage() {
-  const [tests, setTests] = useState<Test[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [classes, setClasses] = useState<Class[]>([]);
-  const [completedCount, setCompletedCount] = useState(0);
+  const [recentTests, setRecentTests] = useState<TestRow[]>([]);
+  const [testCount, setTestCount] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const t = getTests();
-    const s = getStudents();
-    const c = getClasses();
-    setTests(t);
-    setStudents(s);
-    setClasses(c);
-    setCompletedCount(
-      t.filter((test) => getAnswersByTest(test.id).length > 0).length
-    );
+    async function loadData() {
+      // 전체 테스트 수 (count)
+      const { count } = await supabase
+        .from('tests')
+        .select('*', { count: 'exact', head: true });
+
+      // 최근 테스트 5개
+      const { data } = await supabase
+        .from('tests')
+        .select('id, title, school_name, grade, total_questions, created_at')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      setTestCount(count ?? 0);
+      setRecentTests(data ?? []);
+      setLoading(false);
+    }
+    loadData();
   }, []);
 
   const STATS: StatCard[] = [
     {
       icon: ClipboardList,
       label: '등록된 테스트',
-      value: tests.length,
+      value: loading ? '–' : testCount,
       sub: '총 테스트 수',
     },
     {
       icon: GraduationCap,
       label: '분석 중인 반',
-      value: classes.length,
+      value: '–',
       sub: '운영 반 수',
     },
     {
       icon: Users,
       label: '등록 학생 수',
-      value: students.length,
+      value: '–',
       sub: '전체 학생',
     },
     {
       icon: ClipboardCheck,
       label: '완료된 분석',
-      value: completedCount,
+      value: '–',
       sub: '채점 완료 테스트',
       accent: true,
     },
   ];
-
-  const recentTests = [...tests].reverse().slice(0, 5);
 
   return (
     <div className="space-y-7">
@@ -189,7 +204,6 @@ export default function AdminDashboardPage() {
               className="group relative rounded-xl p-5 border transition-all hover:border-orange-300"
               style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
             >
-              {/* 태그 */}
               {menu.tag && (
                 <span
                   className="absolute top-4 right-4 text-xs font-semibold px-2 py-0.5 rounded-full"
@@ -198,24 +212,18 @@ export default function AdminDashboardPage() {
                   {menu.tag}
                 </span>
               )}
-
-              {/* 아이콘 */}
               <div
                 className="w-9 h-9 rounded-lg flex items-center justify-center mb-4 transition-colors group-hover:bg-orange-100"
                 style={{ background: 'var(--accent-lt)' }}
               >
                 <menu.icon size={18} style={{ color: 'var(--accent)' }} />
               </div>
-
-              {/* 텍스트 */}
               <p className="font-semibold text-sm mb-1.5" style={{ color: 'var(--fg-main)' }}>
                 {menu.label}
               </p>
               <p className="text-xs leading-relaxed" style={{ color: 'var(--fg-sub)' }}>
                 {menu.desc}
               </p>
-
-              {/* 화살표 */}
               <div
                 className="flex items-center gap-1 mt-4 text-xs font-semibold transition-colors group-hover:text-orange-500"
                 style={{ color: 'var(--fg-muted)' }}
@@ -248,11 +256,15 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="flex-1 flex flex-col divide-y" style={{ borderColor: 'var(--border)' }}>
-            {recentTests.length === 0 ? (
+            {loading ? (
+              <div className="flex-1 flex items-center justify-center py-10">
+                <Loader2 size={20} className="animate-spin" style={{ color: 'var(--fg-muted)' }} />
+              </div>
+            ) : recentTests.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center py-10 px-5 text-center">
                 <ClipboardList size={28} className="mb-2 opacity-20" style={{ color: 'var(--fg-muted)' }} />
                 <p className="text-sm" style={{ color: 'var(--fg-muted)' }}>
-                  아직 테스트가 없습니다
+                  아직 등록된 테스트가 없습니다.
                 </p>
                 <Link
                   href="/tests/new"
@@ -264,13 +276,14 @@ export default function AdminDashboardPage() {
               </div>
             ) : (
               recentTests.map((test) => {
-                const cls = classes.find((c) => c.id === test.class_id);
-                const answered = getAnswersByTest(test.id).length > 0;
+                const subtitle = [test.school_name, test.grade]
+                  .filter(Boolean)
+                  .join(' · ');
                 return (
                   <div key={test.id} className="flex items-start gap-3 px-5 py-3.5">
                     <div
-                      className="mt-0.5 w-2 h-2 rounded-full shrink-0"
-                      style={{ background: answered ? 'var(--accent)' : 'var(--border)' }}
+                      className="mt-1.5 w-2 h-2 rounded-full shrink-0"
+                      style={{ background: 'var(--accent)' }}
                     />
                     <div className="flex-1 min-w-0">
                       <p
@@ -280,19 +293,15 @@ export default function AdminDashboardPage() {
                         {test.title}
                       </p>
                       <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--fg-muted)' }}>
-                        {cls?.name ?? '반 미지정'} · {formatDate(test.test_date)}
+                        {subtitle || '정보 없음'} · {formatDate(test.created_at)}
                       </p>
                     </div>
                     <Link
-                      href={answered ? `/analysis/class?testId=${test.id}` : `/answers?testId=${test.id}`}
+                      href={`/tests/${test.id}/questions`}
                       className="shrink-0 text-xs px-2 py-1 rounded-md font-medium transition-colors hover:opacity-80"
-                      style={
-                        answered
-                          ? { background: 'var(--accent-lt)', color: 'var(--accent)' }
-                          : { background: '#f1f5f9', color: 'var(--fg-sub)' }
-                      }
+                      style={{ background: 'var(--accent-lt)', color: 'var(--accent)' }}
                     >
-                      {answered ? '분석' : '입력'}
+                      문항
                     </Link>
                   </div>
                 );
