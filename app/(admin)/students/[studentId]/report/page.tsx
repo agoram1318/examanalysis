@@ -345,13 +345,16 @@ export default function StudentReportPage({
         return;
       }
 
-      const subjectsRaw = testRaw.subjects as { name: string } | null;
+      const subjectsRaw = testRaw.subjects as unknown as { name: string } | { name: string }[] | null;
+      const subjectName = Array.isArray(subjectsRaw)
+        ? (subjectsRaw[0]?.name ?? null)
+        : (subjectsRaw?.name ?? null);
       setTest({
         id:           testRaw.id,
         title:        testRaw.title,
         school_name:  testRaw.school_name,
         grade:        testRaw.grade,
-        subject_name: subjectsRaw?.name ?? null,
+        subject_name: subjectName,
       });
 
       // 4. 문항 (단원 조인)
@@ -367,10 +370,15 @@ export default function StudentReportPage({
         .eq('test_id', classData.test_id)
         .order('question_number');
 
+      type UnitRaw = { name: string } | { name: string }[] | null;
+      function pickName(raw: unknown): string | null {
+        const u = raw as UnitRaw;
+        if (!u) return null;
+        if (Array.isArray(u)) return u[0]?.name ?? null;
+        return u.name ?? null;
+      }
+
       const questions: QuestionRow[] = (questionsRaw ?? []).map((q) => {
-        const maj = q.units_major as { name: string } | null;
-        const mid = q.units_middle as { name: string } | null;
-        const sml = q.units_small as { name: string } | null;
         return {
           id:               q.id,
           question_number:  q.question_number,
@@ -379,9 +387,9 @@ export default function StudentReportPage({
           question_type:    q.question_type,
           difficulty:       q.difficulty,
           evaluation_point: q.evaluation_point,
-          major_unit_name:  maj?.name ?? null,
-          middle_unit_name: mid?.name ?? null,
-          small_unit_name:  sml?.name ?? null,
+          major_unit_name:  pickName(q.units_major),
+          middle_unit_name: pickName(q.units_middle),
+          small_unit_name:  pickName(q.units_small),
         };
       });
 
