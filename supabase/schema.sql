@@ -79,8 +79,8 @@ CREATE TABLE IF NOT EXISTS questions (
   small_unit_id   BIGINT      REFERENCES units_small(id)  ON DELETE SET NULL,
   -- 예: '기본 계산형' | '개념 이해형' | '조건 해석형' | '변별형' | '서술형'
   question_type   TEXT,
-  -- 예: '하' | '중' | '상' | '최상'
-  difficulty      TEXT,
+  -- 1~8 숫자 등급: 1~2 기본확인 / 3~4 기본적용 / 5~6 중상변별 / 7~8 고난도
+  difficulty      SMALLINT CHECK (difficulty BETWEEN 1 AND 8),
   evaluation_point TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
 
@@ -330,3 +330,24 @@ CROSS JOIN (VALUES
 ) AS sm(name)
 WHERE s.name = '공통수학1' AND maj.name = '행렬' AND mid.name = '행렬과 그 연산'
 ON CONFLICT DO NOTHING;
+
+-- ============================================================
+-- MIGRATION: difficulty 컬럼 TEXT → SMALLINT (기존 DB 적용용)
+-- Supabase SQL Editor에서 아래 구문을 실행하세요.
+-- 새로 생성하는 DB라면 위의 CREATE TABLE이 이미 SMALLINT이므로 불필요합니다.
+-- ============================================================
+/*
+ALTER TABLE questions
+  ALTER COLUMN difficulty TYPE SMALLINT
+  USING CASE difficulty
+    WHEN '하'   THEN 2
+    WHEN '중'   THEN 4
+    WHEN '상'   THEN 6
+    WHEN '최상' THEN 8
+    ELSE NULL
+  END;
+
+ALTER TABLE questions
+  ADD CONSTRAINT questions_difficulty_range
+  CHECK (difficulty BETWEEN 1 AND 8);
+*/
