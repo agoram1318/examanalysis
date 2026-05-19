@@ -2,134 +2,130 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardContent } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { Plus, ClipboardList, Edit, Trash2, Eye, PenSquare } from 'lucide-react';
-import { getTests, getClasses, getSubjects, getQuestionsByTest, getAnswersByTest, deleteTest } from '@/lib/store';
-import { Test, Class, Subject } from '@/lib/types';
+import { Plus, ClipboardList, Edit2, Users, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/utils';
 
+type TestRow = {
+  id: number;
+  title: string;
+  school_name: string | null;
+  grade: string | null;
+  total_questions: number;
+  created_at: string;
+  subjects: { name: string } | null;
+};
+
 export default function TestsPage() {
-  const [tests, setTests] = useState<Test[]>([]);
-  const [classes, setClasses] = useState<Class[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [tests, setTests] = useState<TestRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const load = () => {
-    setTests(getTests());
-    setClasses(getClasses());
-    setSubjects(getSubjects());
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const handleDelete = (id: string) => {
-    if (confirm('테스트를 삭제하시겠습니까? 관련 답안도 모두 삭제됩니다.')) {
-      deleteTest(id);
-      load();
-    }
-  };
+  useEffect(() => {
+    supabase
+      .from('tests')
+      .select('id, title, school_name, grade, total_questions, created_at, subjects(name)')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setTests((data ?? []) as TestRow[]);
+        setLoading(false);
+      });
+  }, []);
 
   return (
     <div className="space-y-4">
+      {/* ── 헤더 ── */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">테스트 목록</h2>
-          <p className="text-sm text-slate-500 mt-0.5">총 {tests.length}개의 테스트</p>
+          <h2 className="text-lg font-bold" style={{ color: 'var(--fg-main)' }}>
+            테스트 목록
+          </h2>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--fg-muted)' }}>
+            총 {loading ? '–' : tests.length}개의 테스트
+          </p>
         </div>
         <Link href="/tests/new">
-          <Button>
-            <Plus size={16} />
-            새 테스트 만들기
+          <Button variant="accent">
+            <Plus size={16} /> 새 테스트 등록
           </Button>
         </Link>
       </div>
 
-      {tests.length === 0 ? (
+      {/* ── 로딩 ── */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 size={22} className="animate-spin" style={{ color: 'var(--fg-muted)' }} />
+        </div>
+      ) : tests.length === 0 ? (
         <Card>
           <CardContent className="text-center py-16">
-            <ClipboardList size={40} className="mx-auto mb-3 text-slate-300" />
-            <p className="text-slate-500">아직 테스트가 없습니다.</p>
-            <Link href="/tests/new" className="mt-3 inline-block">
-              <Button>
-                <Plus size={16} /> 첫 번째 테스트 만들기
+            <ClipboardList
+              size={40}
+              className="mx-auto mb-3 opacity-20"
+              style={{ color: 'var(--fg-muted)' }}
+            />
+            <p className="mb-3" style={{ color: 'var(--fg-muted)' }}>
+              아직 등록된 테스트가 없습니다.
+            </p>
+            <Link href="/tests/new">
+              <Button variant="accent" size="sm">
+                <Plus size={14} /> 첫 번째 테스트 등록
               </Button>
             </Link>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {tests.map(test => {
-            const cls = classes.find(c => c.id === test.class_id);
-            const subject = subjects.find(s => s.id === test.subject_id);
-            const questions = getQuestionsByTest(test.id);
-            const answers = getAnswersByTest(test.id);
-            const answeredStudents = new Set(answers.map(a => a.student_id)).size;
-
+          {tests.map((test) => {
+            const meta = [test.school_name, test.grade].filter(Boolean).join(' · ');
             return (
-              <Card key={test.id}>
-                <CardContent className="py-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-slate-800 text-base">{test.title}</h3>
-                        <Badge variant="info">{subject?.name ?? '과목미상'}</Badge>
-                        {questions.length > 0 && (
-                          <Badge variant="outline">{questions.length}문항</Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 text-sm text-slate-500">
-                        <span>{cls?.name ?? '반 미지정'}</span>
-                        <span>·</span>
-                        <span>{formatDate(test.test_date)}</span>
-                        <span>·</span>
-                        <span>총점 {test.total_score}점</span>
-                        {answeredStudents > 0 && (
-                          <>
-                            <span>·</span>
-                            <span className="text-green-600 font-medium">{answeredStudents}명 답안 입력됨</span>
-                          </>
-                        )}
-                      </div>
-                      {test.description && (
-                        <p className="text-xs text-slate-400 mt-1">{test.description}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 ml-4 shrink-0">
-                      {questions.length > 0 && (
-                        <Link href={`/answers?testId=${test.id}`}>
-                          <Button size="sm" variant="outline">
-                            <PenSquare size={14} />
-                            답안입력
-                          </Button>
-                        </Link>
-                      )}
-                      {answeredStudents > 0 && (
-                        <Link href={`/analysis/class?testId=${test.id}`}>
-                          <Button size="sm" variant="secondary">
-                            <Eye size={14} />
-                            분석보기
-                          </Button>
-                        </Link>
-                      )}
-                      <Link href={`/tests/${test.id}/questions`}>
-                        <Button size="sm" variant="ghost">
-                          <Edit size={14} />
-                          문항편집
-                        </Button>
-                      </Link>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                        onClick={() => handleDelete(test.id)}
+              <div
+                key={test.id}
+                className="rounded-xl border px-5 py-4 transition-colors hover:border-orange-200"
+                style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  {/* 왼쪽: 테스트 정보 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <h3
+                        className="font-semibold text-base"
+                        style={{ color: 'var(--fg-main)' }}
                       >
-                        <Trash2 size={14} />
-                      </Button>
+                        {test.title}
+                      </h3>
+                      {test.subjects?.name && (
+                        <Badge variant="info">{test.subjects.name}</Badge>
+                      )}
+                      <Badge variant="outline">{test.total_questions}문항</Badge>
+                    </div>
+                    <div
+                      className="flex items-center gap-2 text-sm flex-wrap"
+                      style={{ color: 'var(--fg-muted)' }}
+                    >
+                      {meta && <span>{meta}</span>}
+                      {meta && <span>·</span>}
+                      <span>{formatDate(test.created_at)}</span>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+
+                  {/* 오른쪽: 버튼 */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Link href={`/tests/${test.id}/questions`}>
+                      <Button size="sm" variant="ghost">
+                        <Edit2 size={14} /> 문항 입력
+                      </Button>
+                    </Link>
+                    <Link href={`/tests/${test.id}/classes/new`}>
+                      <Button size="sm" variant="outline">
+                        <Users size={14} /> 반 생성
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              </div>
             );
           })}
         </div>
