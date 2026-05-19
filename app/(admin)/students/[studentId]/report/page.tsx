@@ -4,7 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, BarChart3, AlertCircle, Loader2, ChevronRight,
-  CheckCircle2, XCircle, MinusCircle, FileBarChart,
+  CheckCircle2, XCircle, MinusCircle, FileBarChart, Printer,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Button from '@/components/ui/Button';
@@ -518,8 +518,10 @@ export default function StudentReportPage({
     { label: '찍음 비율',       value: `${guessRate.toFixed(1)}%`, accent: false },
   ];
 
+  const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
+    <div className="report-wrap" style={{ maxWidth: 900, margin: '0 auto' }}>
 
       {/* ── 페이지 헤더 (네비게이션) ── */}
       <div className="flex items-start justify-between mb-5 no-print">
@@ -543,11 +545,26 @@ export default function StudentReportPage({
             </span>
           </div>
         </div>
-        <Link href={`/classes/${cls.id}/analysis`} className="no-print">
-          <Button variant="outline" size="sm">
-            <BarChart3 size={14} /> 반 전체 분석 보기
+        <div className="flex items-center gap-2">
+          <Link href={`/classes/${cls.id}/analysis`}>
+            <Button variant="outline" size="sm">
+              <BarChart3 size={14} /> 반 전체 분석 보기
+            </Button>
+          </Link>
+          <Button variant="accent" size="sm" onClick={() => window.print()}>
+            <Printer size={14} /> 인쇄 / PDF 저장
           </Button>
-        </Link>
+        </div>
+      </div>
+
+      {/* 인쇄 안내 (화면에서만 표시) */}
+      <div
+        className="no-print rounded-xl px-4 py-2.5 mb-4 flex items-center gap-2 text-xs"
+        style={{ background: 'var(--accent-lt)', border: '1px solid #fed7aa', color: '#7c2d12' }}
+      >
+        <Printer size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+        인쇄 창에서 대상 프린터를 <strong>&apos;PDF로 저장&apos;</strong>으로 선택하면 PDF 파일로 저장할 수 있습니다.
+        배경 그래픽 옵션을 켜면 색상이 더 잘 출력됩니다.
       </div>
 
       {/* ── 리포트 본문 ── */}
@@ -597,13 +614,16 @@ export default function StudentReportPage({
               </div>
             ))}
           </div>
+
+          {/* 생성일 — 인쇄 시만 표시 */}
+          <p className="print-only mt-3 text-xs opacity-50">생성일: {today}</p>
         </div>
 
         {/* ── 본문 콘텐츠 ── */}
         <div className="px-8 py-6 space-y-8">
 
           {/* ① 종합 결과 카드 */}
-          <section>
+          <section className="report-section">
             <SectionTitle>종합 결과</SectionTitle>
             <div
               className="grid gap-3"
@@ -636,7 +656,7 @@ export default function StudentReportPage({
           </section>
 
           {/* ② 단원별 성취도 */}
-          <section>
+          <section className="report-section">
             <SectionTitle>단원별 성취도</SectionTitle>
             {majorStats.length === 0 ? (
               <EmptyState text="문항에 단원 정보가 입력되지 않았습니다." />
@@ -653,7 +673,7 @@ export default function StudentReportPage({
           </section>
 
           {/* ③ 유형별 성취도 */}
-          <section>
+          <section className="report-section">
             <SectionTitle>유형별 성취도</SectionTitle>
             {typeStats.length === 0 ? (
               <EmptyState text="문항에 유형 정보가 입력되지 않았습니다." />
@@ -663,7 +683,7 @@ export default function StudentReportPage({
           </section>
 
           {/* ④ 난이도별 성취도 */}
-          <section>
+          <section className="report-section">
             <SectionTitle>난이도별 성취도</SectionTitle>
             {diffStatsSorted.length === 0 ? (
               <EmptyState text="문항에 난이도 정보가 입력되지 않았습니다." />
@@ -673,14 +693,14 @@ export default function StudentReportPage({
           </section>
 
           {/* ⑤ 문항별 결과표 */}
-          <section>
+          <section className="report-section page-break-before">
             <SectionTitle>문항별 결과</SectionTitle>
             <QuestionTable qaRows={qaRows} />
           </section>
 
           {/* ⑥ 자동 코멘트 */}
           {comment && (
-            <section>
+            <section className="report-section">
               <SectionTitle>종합 학습 코멘트</SectionTitle>
               <div
                 className="rounded-xl px-6 py-5"

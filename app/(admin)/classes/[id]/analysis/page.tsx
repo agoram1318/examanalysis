@@ -4,7 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, Users, AlertCircle, Loader2, ChevronRight,
-  BarChart3, FileBarChart, TrendingDown, Crosshair,
+  BarChart3, FileBarChart, TrendingDown, Crosshair, Printer,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Button from '@/components/ui/Button';
@@ -482,8 +482,10 @@ export default function ClassAnalysisPage({
     verticalAlign: 'middle',
   });
 
+  const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+    <div className="report-wrap" style={{ maxWidth: 1100, margin: '0 auto' }}>
 
       {/* ── 네비게이션 헤더 ── */}
       <div className="flex items-start justify-between mb-5 no-print">
@@ -504,6 +506,19 @@ export default function ClassAnalysisPage({
             <span className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>반 전체 분석</span>
           </div>
         </div>
+        <Button variant="accent" size="sm" onClick={() => window.print()}>
+          <Printer size={14} /> 인쇄 / PDF 저장
+        </Button>
+      </div>
+
+      {/* 인쇄 안내 (화면에서만 표시) */}
+      <div
+        className="no-print rounded-xl px-4 py-2.5 mb-4 flex items-center gap-2 text-xs"
+        style={{ background: 'var(--accent-lt)', border: '1px solid #fed7aa', color: '#7c2d12' }}
+      >
+        <Printer size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+        인쇄 창에서 대상 프린터를 <strong>&apos;PDF로 저장&apos;</strong>으로 선택하면 PDF 파일로 저장할 수 있습니다.
+        반 전체 분석은 가로 방향 인쇄를 권장합니다.
       </div>
 
       {/* ── 리포트 헤더 ── */}
@@ -533,13 +548,16 @@ export default function ClassAnalysisPage({
             </div>
           ))}
         </div>
+
+        {/* 생성일 — 인쇄 시만 표시 */}
+        <p className="print-only mt-3 text-xs opacity-50">생성일: {today}</p>
       </div>
 
       <div className="space-y-6">
 
         {/* ① 전체 요약 카드 */}
         <section
-          className="rounded-xl border p-6"
+          className="report-section rounded-xl border p-6"
           style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
         >
           <SectionTitle>전체 요약</SectionTitle>
@@ -566,7 +584,7 @@ export default function ClassAnalysisPage({
 
         {/* ② 학생별 점수 리스트 */}
         <section
-          className="rounded-xl border p-6"
+          className="report-section rounded-xl border p-6"
           style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
         >
           <SectionTitle icon={<Users size={15} />}>학생별 점수</SectionTitle>
@@ -628,7 +646,7 @@ export default function ClassAnalysisPage({
 
         {/* ③ 문항별 정답률 */}
         <section
-          className="rounded-xl border p-6"
+          className="report-section page-break-before rounded-xl border p-6"
           style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
         >
           <SectionTitle icon={<BarChart3 size={15} />}>문항별 정답률 분석</SectionTitle>
@@ -721,7 +739,7 @@ export default function ClassAnalysisPage({
 
             {/* TOP5 오답 */}
             <section
-              className="rounded-xl border p-6"
+              className="report-section rounded-xl border p-6"
               style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
             >
               <SectionTitle icon={<TrendingDown size={15} />}>가장 많이 틀린 문항 TOP 5</SectionTitle>
@@ -778,7 +796,7 @@ export default function ClassAnalysisPage({
 
             {/* TOP5 찍음 */}
             <section
-              className="rounded-xl border p-6"
+              className="report-section rounded-xl border p-6"
               style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
             >
               <SectionTitle icon={<Crosshair size={15} />}>찍음 비율 높은 문항 TOP 5</SectionTitle>
@@ -838,7 +856,7 @@ export default function ClassAnalysisPage({
         {/* ⑥ 단원별 분석 */}
         {!noData && (majorMap.size > 0 || middleMap.size > 0) && (
           <section
-            className="rounded-xl border p-6"
+            className="report-section rounded-xl border p-6"
             style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
           >
             <SectionTitle>단원별 정답률 분석</SectionTitle>
@@ -852,7 +870,7 @@ export default function ClassAnalysisPage({
         {/* ⑦ 유형별 분석 */}
         {!noData && typeMap.size > 0 && (
           <section
-            className="rounded-xl border p-6"
+            className="report-section rounded-xl border p-6"
             style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
           >
             <SectionTitle>유형별 정답률 분석</SectionTitle>
@@ -869,7 +887,7 @@ export default function ClassAnalysisPage({
         {/* ⑧ 난이도별 분석 */}
         {!noData && diffMap.size > 0 && (
           <section
-            className="rounded-xl border p-6"
+            className="report-section rounded-xl border p-6"
             style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
           >
             <SectionTitle>난이도별 정답률 분석</SectionTitle>
@@ -919,7 +937,7 @@ export default function ClassAnalysisPage({
         {/* ⑨ 반 전체 자동 코멘트 */}
         {comment && (
           <section
-            className="rounded-xl border p-6"
+            className="report-section rounded-xl border p-6"
             style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
           >
             <SectionTitle>반 전체 학습 코멘트</SectionTitle>
