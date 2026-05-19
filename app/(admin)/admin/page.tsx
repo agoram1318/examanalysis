@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import {
   ClipboardList, GraduationCap, Users, BarChart3,
   ArrowRight, ClipboardCheck, PenLine, ListChecks,
-  FileBarChart, ChevronRight, TrendingUp, Loader2,
+  FileBarChart, ChevronRight, TrendingUp, Loader2, BookOpen,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/utils';
@@ -76,6 +76,13 @@ const MENUS: MenuCard[] = [
     label: '반 전체 분석표',
     desc: '오답 TOP5, 찍음 비율, 단원별 정답률을 분석합니다.',
     href: '/analysis/class',
+  },
+  {
+    icon: BookOpen,
+    label: '단원 관리',
+    desc: '과목·대단원·중단원·소단원 체계를 설정하고 관리합니다.',
+    href: '/units',
+    tag: '설정',
   },
 ];
 
