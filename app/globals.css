@@ -1,30 +1,28 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --bg-base:    #f5f4f0;   /* 크림톤 배경 */
+  --bg-card:    #ffffff;
+  --fg-main:    #1a1f2e;   /* 차콜 네이비 */
+  --fg-sub:     #5a6172;
+  --fg-muted:   #9ba3b0;
+  --accent:     #f97316;   /* 오렌지 */
+  --accent-lt:  #fff7ed;
+  --border:     #e8e6e0;
+  --sidebar-bg: #1a1f2e;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg-base);
+  color: var(--fg-main);
 }
 
+/* ── 인쇄 스타일 ── */
 @media print {
-  .no-print {
-    display: none !important;
-  }
-  .print-only {
-    display: block !important;
-  }
-  aside {
-    display: none !important;
-  }
-  .ml-64 {
-    margin-left: 0 !important;
-  }
+  .no-print  { display: none !important; }
+  .print-only{ display: block !important; }
+  aside      { display: none !important; }
+  .admin-main { margin-left: 0 !important; }
 }

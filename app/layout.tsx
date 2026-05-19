@@ -1,27 +1,19 @@
 import type { Metadata } from 'next';
 import { Geist } from 'next/font/google';
 import './globals.css';
-import Sidebar from '@/components/layout/Sidebar';
-import Header from '@/components/layout/Header';
 
 const geist = Geist({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: '봉샘스쿨 테스트 분석 시스템',
-  description: '수학 테스트 자동 채점 및 학생별 분석표 생성 시스템',
+  title: '봉샘스쿨 테스트 분석표 생성기',
+  description: '수학 테스트 답안을 바탕으로 학생별 분석표와 반 전체 분석표를 생성하는 관리자용 프로그램',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body className={`${geist.className} bg-slate-50`}>
-        <Sidebar />
-        <div className="ml-64 min-h-screen flex flex-col">
-          <Header />
-          <main className="flex-1 p-6">
-            {children}
-          </main>
-        </div>
+      <body className={geist.className}>
+        {children}
       </body>
     </html>
   );
