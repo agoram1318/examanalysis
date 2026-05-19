@@ -60,7 +60,7 @@ export default function NewClassPage({
       .single()
       .then(({ data, error }) => {
         if (error || !data) setNotFound(true);
-        else setTest(data as TestRow);
+        else setTest(data as unknown as TestRow);
         setLoading(false);
       });
   }, [testId]);

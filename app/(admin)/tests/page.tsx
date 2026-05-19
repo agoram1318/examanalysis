@@ -29,7 +29,7 @@ export default function TestsPage() {
       .select('id, title, school_name, grade, total_questions, created_at, subjects(name)')
       .order('created_at', { ascending: false })
       .then(({ data }) => {
-        setTests((data ?? []) as TestRow[]);
+        setTests((data ?? []) as unknown as TestRow[]);
         setLoading(false);
       });
   }, []);

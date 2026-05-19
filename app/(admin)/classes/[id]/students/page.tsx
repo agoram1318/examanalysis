@@ -86,7 +86,7 @@ export default function StudentsPage({
         return;
       }
 
-      setCls(data as ClassRow);
+      setCls(data as unknown as ClassRow);
       await reloadStudents();
       setLoading(false);
     }
