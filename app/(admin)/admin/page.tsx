@@ -52,10 +52,17 @@ const MENUS: MenuCard[] = [
     tag: '문항 관리',
   },
   {
+    icon: GraduationCap,
+    label: '반 관리',
+    desc: '전체 반 목록에서 학생 등록, 답안 입력, 반 분석으로 바로 이동합니다.',
+    href: '/classes',
+    tag: '핵심',
+  },
+  {
     icon: Users,
     label: '반 생성 · 학생 등록',
-    desc: '테스트에 반을 생성하고 학생을 일괄 등록합니다.',
-    href: '/tests',
+    desc: '테스트를 선택해 반을 생성하고 학생을 일괄 등록합니다.',
+    href: '/classes',
   },
   {
     icon: PenLine,
@@ -370,11 +377,11 @@ export default function AdminDashboardPage() {
               최근 반
             </span>
             <Link
-              href="/tests"
+              href="/classes"
               className="flex items-center gap-1 text-xs font-medium transition-colors hover:opacity-70"
               style={{ color: 'var(--accent)' }}
             >
-              테스트로 <ArrowRight size={12} />
+              전체보기 <ArrowRight size={12} />
             </Link>
           </div>
 
@@ -431,12 +438,12 @@ export default function AdminDashboardPage() {
             style={{ borderColor: 'var(--border)' }}
           >
             <Link
-              href="/tests"
+              href="/classes"
               className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 border"
               style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--fg-main)' }}
             >
               <GraduationCap size={15} />
-              테스트 목록에서 반 관리하기
+              반 관리로 이동
             </Link>
           </div>
         </div>
@@ -457,9 +464,9 @@ export default function AdminDashboardPage() {
           {[
             { step: '1', label: '테스트 등록', href: '/tests/new' },
             { step: '2', label: '문항 정보 입력', href: '/tests' },
-            { step: '3', label: '반 생성', href: '/tests' },
-            { step: '4', label: '학생 등록', href: '/tests' },
-            { step: '5', label: '답안 입력', href: '/tests' },
+            { step: '3', label: '반 생성', href: '/classes' },
+            { step: '4', label: '학생 등록', href: '/classes' },
+            { step: '5', label: '답안 입력', href: '/classes' },
             { step: '6', label: '분석표 확인', href: '/tests' },
           ].map((item, i, arr) => (
             <div key={item.step} className="flex items-center gap-2">

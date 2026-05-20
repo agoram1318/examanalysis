@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   ClipboardList,
+  GraduationCap,
   BookMarked,
   BookOpen,
 } from 'lucide-react';
@@ -17,16 +18,25 @@ type NavItem = {
 };
 
 const NAV: NavItem[] = [
-  { label: '대시보드',  href: '/admin',  icon: LayoutDashboard, desc: '전체 현황' },
-  { label: '테스트 관리', href: '/tests', icon: ClipboardList,  desc: '문항·반·답안·분석' },
-  { label: '단원 관리', href: '/units',  icon: BookMarked,     desc: '과목·단원 설정' },
+  { label: '대시보드',   href: '/admin',   icon: LayoutDashboard, desc: '전체 현황' },
+  { label: '테스트 관리', href: '/tests',  icon: ClipboardList, desc: '등록·문항 입력' },
+  { label: '반 관리',    href: '/classes', icon: GraduationCap,  desc: '학생·답안·분석' },
+  { label: '단원 관리',  href: '/units',   icon: BookMarked,     desc: '과목·단원 설정' },
 ];
 
 export default function AdminSidebar() {
   const pathname = usePathname();
 
-  const isActive = (href: string) =>
-    href === '/admin' ? pathname === '/admin' : pathname.startsWith(href);
+  const isActive = (href: string) => {
+    if (href === '/admin') return pathname === '/admin';
+    if (href === '/classes') {
+      return pathname === '/classes' || /^\/classes\/\d+/.test(pathname);
+    }
+    if (href === '/tests') {
+      return pathname.startsWith('/tests') && !/^\/classes/.test(pathname);
+    }
+    return pathname.startsWith(href);
+  };
 
   return (
     <aside
