@@ -29,22 +29,12 @@ type QuestionForm = {
   major_unit_id: number | null;
   middle_unit_id: number | null;
   small_unit_id: number | null;
-  question_type: string;
   difficulty: number | null;
-  evaluation_point: string;
 };
 
 // ─────────────────────────────────────────────
 // 상수
 // ─────────────────────────────────────────────
-const QUESTION_TYPES = [
-  '기본 계산형',
-  '개념 이해형',
-  '조건 해석형',
-  '변별형',
-  '서술형',
-];
-
 const DIFFICULTY_LABELS: Record<number, string> = {
   1: '1 — 기본확인',
   2: '2 — 기본확인',
@@ -64,9 +54,7 @@ function makeDefaultQuestion(num: number): QuestionForm {
     major_unit_id: null,
     middle_unit_id: null,
     small_unit_id: null,
-    question_type: '기본 계산형',
     difficulty: null,
-    evaluation_point: '',
   };
 }
 
@@ -207,20 +195,6 @@ const QuestionRow = React.memo(function QuestionRow({
         )}
       </td>
 
-      {/* 문제 유형 */}
-      <td className="px-2 py-2">
-        <select
-          className={cellInput}
-          style={{ ...cellBorder, width: 120 }}
-          value={q.question_type}
-          onChange={e => onChange(idx, { question_type: e.target.value })}
-        >
-          {QUESTION_TYPES.map(t => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
-      </td>
-
       {/* 난이도 */}
       <td className="px-2 py-2">
         <select
@@ -236,17 +210,6 @@ const QuestionRow = React.memo(function QuestionRow({
             <option key={val} value={val}>{label}</option>
           ))}
         </select>
-      </td>
-
-      {/* 평가 포인트 */}
-      <td className="px-2 py-2">
-        <input
-          className={cellInput}
-          style={{ ...cellBorder, width: 148 }}
-          placeholder="예: 이차방정식 근의 공식"
-          value={q.evaluation_point}
-          onChange={e => onChange(idx, { evaluation_point: e.target.value })}
-        />
       </td>
     </tr>
   );
@@ -334,7 +297,7 @@ export default function QuestionsPage({
       const { data: existingQs } = await supabase
         .from('questions')
         .select(
-          'question_number, answer, score, major_unit_id, middle_unit_id, small_unit_id, question_type, difficulty, evaluation_point'
+          'question_number, answer, score, major_unit_id, middle_unit_id, small_unit_id, difficulty'
         )
         .eq('test_id', testId)
         .order('question_number');
@@ -348,9 +311,7 @@ export default function QuestionsPage({
             major_unit_id:   q.major_unit_id ?? null,
             middle_unit_id:  q.middle_unit_id ?? null,
             small_unit_id:   q.small_unit_id ?? null,
-            question_type:   q.question_type ?? '기본 계산형',
             difficulty:      q.difficulty ?? null,
-            evaluation_point: q.evaluation_point ?? '',
           }))
         );
       } else {
@@ -420,9 +381,7 @@ export default function QuestionsPage({
       major_unit_id:   q.major_unit_id,
       middle_unit_id:  q.middle_unit_id,
       small_unit_id:   q.small_unit_id,
-      question_type:   q.question_type || null,
       difficulty:      q.difficulty,
-      evaluation_point: q.evaluation_point.trim() || null,
     }));
 
     const { error: insErr } = await supabase.from('questions').insert(rows);
@@ -564,7 +523,7 @@ export default function QuestionsPage({
         </div>
 
         <div className="overflow-x-auto">
-          <table style={{ minWidth: 1080, borderCollapse: 'collapse', width: '100%' }}>
+          <table style={{ minWidth: 780, borderCollapse: 'collapse', width: '100%' }}>
             <thead style={{ background: 'var(--bg-base)' }}>
               <tr>
                 {[
@@ -574,9 +533,7 @@ export default function QuestionsPage({
                   { label: '대단원',    w: 152 },
                   { label: '중단원',    w: 152 },
                   { label: '소단원',    w: 152 },
-                  { label: '문제 유형', w: 136 },
                   { label: '난이도',    w: 132 },
-                  { label: '평가 포인트', w: 164 },
                 ].map(col => (
                   <th
                     key={col.label}

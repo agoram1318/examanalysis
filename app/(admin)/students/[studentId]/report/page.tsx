@@ -39,9 +39,7 @@ type QuestionRow = {
   question_number: number;
   answer: string | null;
   score: number;
-  question_type: string | null;
   difficulty: number | null;
-  evaluation_point: string | null;
   major_unit_name: string | null;
   middle_unit_name: string | null;
   small_unit_name: string | null;
@@ -131,23 +129,6 @@ function generateComment(qaRows: QA[], totalScore: number, totalPossible: number
   // 찍어서 맞은 비율
   if (guessedCount > 0 && guessedCorrect / guessedCount > 0.5) {
     parts.push('맞힌 문항도 풀이 과정을 점검할 필요가 있습니다.');
-  }
-
-  // 오답 유형 분석
-  const typeWrong = new Map<string, number>();
-  qaRows.forEach((qa) => {
-    if (qa.ans && !qa.ans.is_correct && !qa.ans.is_blank && qa.ans.selected_answer) {
-      const t = qa.question_type || '기타';
-      typeWrong.set(t, (typeWrong.get(t) ?? 0) + 1);
-    }
-  });
-  const maxWrong = [...typeWrong.entries()].sort((a, b) => b[1] - a[1])[0];
-  if (maxWrong && maxWrong[1] >= 2) {
-    if (maxWrong[0].includes('조건')) {
-      parts.push('조건을 식으로 정리하고 풀이 방향을 잡는 훈련이 필요합니다.');
-    } else if (maxWrong[0].includes('계산')) {
-      parts.push('계산 정확도와 기본 개념 점검이 필요합니다.');
-    }
   }
 
   // 후반 미응답
@@ -360,7 +341,7 @@ export default function StudentReportPage({
         .from('questions')
         .select(`
           id, question_number, answer, score,
-          question_type, difficulty, evaluation_point,
+          difficulty,
           units_major:major_unit_id(name),
           units_middle:middle_unit_id(name),
           units_small:small_unit_id(name)
@@ -382,9 +363,7 @@ export default function StudentReportPage({
           question_number:  q.question_number,
           answer:           q.answer,
           score:            Number(q.score),
-          question_type:    q.question_type,
           difficulty:       q.difficulty,
-          evaluation_point: q.evaluation_point,
           major_unit_name:  pickName(q.units_major),
           middle_unit_name: pickName(q.units_middle),
           small_unit_name:  pickName(q.units_small),
@@ -448,8 +427,6 @@ export default function StudentReportPage({
   const middleStats = groupStats(qaRows, (qa) =>
     qa.middle_unit_name ? `${qa.major_unit_name ?? ''} > ${qa.middle_unit_name}` : '미분류'
   );
-  // 유형별
-  const typeStats = groupStats(qaRows, (qa) => qa.question_type || '유형 미설정');
   // 난이도별
   const diffStats = groupStats(qaRows, (qa) => difficultyGroup(qa.difficulty));
   const DIFF_ORDER = ['기본 확인 (1~2)', '기본 적용 (3~4)', '중상 난도 (5~6)', '고난도/킬러 (7~8)', '미설정'];
@@ -669,17 +646,7 @@ export default function StudentReportPage({
             )}
           </section>
 
-          {/* ③ 유형별 성취도 */}
-          <section className="report-section">
-            <SectionTitle>유형별 성취도</SectionTitle>
-            {typeStats.length === 0 ? (
-              <EmptyState text="문항에 유형 정보가 입력되지 않았습니다." />
-            ) : (
-              <AnalysisTable stats={typeStats} />
-            )}
-          </section>
-
-          {/* ④ 난이도별 성취도 */}
+          {/* ③ 난이도별 성취도 */}
           <section className="report-section">
             <SectionTitle>난이도별 성취도</SectionTitle>
             {diffStatsSorted.length === 0 ? (
@@ -780,9 +747,7 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
     { label: '대단원',    w: 100 },
     { label: '중단원',    w: 100 },
     { label: '소단원',    w: 100 },
-    { label: '유형',      w: 96 },
     { label: '난이도',    w: 80 },
-    { label: '평가 포인트', w: 140 },
   ];
 
   return (
@@ -918,19 +883,9 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
                     {qa.small_unit_name ?? '–'}
                   </td>
 
-                  {/* 유형 */}
-                  <td className="px-3 py-2 text-xs" style={{ color: 'var(--fg-sub)' }}>
-                    {qa.question_type ?? '–'}
-                  </td>
-
                   {/* 난이도 */}
                   <td className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: 'var(--fg-sub)' }}>
                     {difficultyLabel(qa.difficulty)}
-                  </td>
-
-                  {/* 평가 포인트 */}
-                  <td className="px-3 py-2 text-xs" style={{ color: 'var(--fg-sub)', maxWidth: 140 }}>
-                    {qa.evaluation_point ?? '–'}
                   </td>
                 </tr>
               );

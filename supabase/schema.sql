@@ -77,11 +77,10 @@ CREATE TABLE IF NOT EXISTS questions (
   major_unit_id   BIGINT      REFERENCES units_major(id)  ON DELETE SET NULL,
   middle_unit_id  BIGINT      REFERENCES units_middle(id) ON DELETE SET NULL,
   small_unit_id   BIGINT      REFERENCES units_small(id)  ON DELETE SET NULL,
-  -- 예: '기본 계산형' | '개념 이해형' | '조건 해석형' | '변별형' | '서술형'
-  question_type   TEXT,
+  question_type    TEXT,        -- 현재 초기버전에서는 미사용
   -- 1~8 숫자 등급: 1~2 기본확인 / 3~4 기본적용 / 5~6 중상변별 / 7~8 고난도
-  difficulty      SMALLINT CHECK (difficulty BETWEEN 1 AND 8),
-  evaluation_point TEXT,
+  difficulty       SMALLINT CHECK (difficulty BETWEEN 1 AND 8),
+  evaluation_point TEXT,        -- 현재 초기버전에서는 미사용
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
 
   UNIQUE (test_id, question_number)

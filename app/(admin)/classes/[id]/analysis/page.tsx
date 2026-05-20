@@ -38,9 +38,7 @@ type QuestionRow = {
   question_number: number;
   answer: string | null;
   score: number;
-  question_type: string | null;
   difficulty: number | null;
-  evaluation_point: string | null;
   major_unit_name: string | null;
   middle_unit_name: string | null;
   small_unit_name: string | null;
@@ -90,7 +88,6 @@ const DIFF_ORDER = ['기본 확인 (1~2)', '기본 적용 (3~4)', '중상 난도
 interface AnalysisData {
   avgRate:          number;
   avgGuessRate:     number;
-  typeStats:        Map<string, { total: number; correct: number }>;
   diffStats:        Map<string, { total: number; correct: number; guessed: number }>;
   questions:        QuestionRow[];
   allAnswers:       AnswerRow[];
@@ -112,11 +109,6 @@ function generateClassComment(d: AnalysisData): string {
 
   if (d.avgGuessRate >= 20) {
     parts.push('풀이 확신도와 시간 관리 점검이 필요합니다.');
-  }
-
-  const condType = d.typeStats.get('조건 해석형');
-  if (condType && condType.total > 0 && condType.correct / condType.total < 0.5) {
-    parts.push('조건을 식으로 정리하고 풀이 방향을 잡는 훈련이 필요합니다.');
   }
 
   const highDiff = d.diffStats.get('중상 난도 (5~6)');
@@ -242,7 +234,7 @@ export default function ClassAnalysisPage({
       const [studentsRes, questionsRes] = await Promise.all([
         supabase.from('students').select('id, student_name, student_code').eq('class_id', classId).order('student_code'),
         supabase.from('questions').select(`
-          id, question_number, answer, score, question_type, difficulty, evaluation_point,
+          id, question_number, answer, score, difficulty,
           units_major:major_unit_id(name),
           units_middle:middle_unit_id(name),
           units_small:small_unit_id(name)
@@ -257,9 +249,7 @@ export default function ClassAnalysisPage({
         question_number:  q.question_number,
         answer:           q.answer,
         score:            Number(q.score),
-        question_type:    q.question_type,
         difficulty:       q.difficulty,
-        evaluation_point: q.evaluation_point,
         major_unit_name:  pickName(q.units_major),
         middle_unit_name: pickName(q.units_middle),
         small_unit_name:  pickName(q.units_small),
@@ -369,18 +359,6 @@ export default function ClassAnalysisPage({
     middleMap.set(mid, midEntry);
   });
 
-  // 유형별 집계
-  const typeMap = new Map<string, { total: number; correct: number }>();
-  allAnswers.forEach((a) => {
-    const q = questions.find((q) => q.id === a.question_id);
-    if (!q) return;
-    const type = q.question_type || '유형 미설정';
-    const e = typeMap.get(type) ?? { total: 0, correct: 0 };
-    e.total++;
-    if (a.is_correct) e.correct++;
-    typeMap.set(type, e);
-  });
-
   // 난이도별 집계
   const diffMap = new Map<string, { total: number; correct: number; guessed: number }>();
   allAnswers.forEach((a) => {
@@ -398,13 +376,12 @@ export default function ClassAnalysisPage({
 
   // 자동 코멘트
   const comment = students.length > 0 && questions.length > 0
-    ? generateClassComment({ avgRate, avgGuessRate, typeStats: typeMap, diffStats: diffMap, questions, allAnswers, studentCount: students.length })
+    ? generateClassComment({ avgRate, avgGuessRate, diffStats: diffMap, questions, allAnswers, studentCount: students.length })
     : '';
 
   // 오답 해석 문구
   function wrongHint(qs: typeof qStats[0]): string {
     if (qs.correctRate < 20) return '고난도 문항으로 변별력이 크게 나타난 문항입니다.';
-    if (qs.q.question_type?.includes('조건')) return '조건 해석 과정에서 어려움이 있었을 가능성이 높습니다.';
     if ((qs.q.difficulty ?? 0) >= 6) return '고난도 문항으로 변별력이 크게 나타난 문항입니다.';
     return '정답률이 낮아 해당 단원의 재점검이 필요합니다.';
   }
@@ -656,7 +633,7 @@ export default function ClassAnalysisPage({
                 <table style={{ minWidth: 1000, borderCollapse: 'collapse', width: '100%' }}>
                   <thead>
                     <tr>
-                      {['번호', '정답', '배점', '정답자', '오답자', '미응답', '정답률', '찍음', '찍음률', '대단원', '중단원', '소단원', '유형', '난이도', '평가 포인트'].map((h) => (
+                      {['번호', '정답', '배점', '정답자', '오답자', '미응답', '정답률', '찍음', '찍음률', '대단원', '중단원', '소단원', '난이도'].map((h) => (
                         <th key={h} style={thStyle}>{h}</th>
                       ))}
                     </tr>
@@ -703,13 +680,9 @@ export default function ClassAnalysisPage({
                           <td style={{ ...tdStyle(i), background: rowBg, fontSize: 12, color: 'var(--fg-sub)' }}>{s.q.major_unit_name ?? '–'}</td>
                           <td style={{ ...tdStyle(i), background: rowBg, fontSize: 12, color: 'var(--fg-sub)' }}>{s.q.middle_unit_name ?? '–'}</td>
                           <td style={{ ...tdStyle(i), background: rowBg, fontSize: 12, color: 'var(--fg-sub)' }}>{s.q.small_unit_name ?? '–'}</td>
-                          <td style={{ ...tdStyle(i), background: rowBg, fontSize: 12, color: 'var(--fg-sub)' }}>{s.q.question_type ?? '–'}</td>
                           <td style={{ ...tdStyle(i), background: rowBg, fontSize: 12, color: 'var(--fg-sub)', whiteSpace: 'nowrap' }}>
                             {s.q.difficulty !== null ? difficultyGroup(s.q.difficulty).replace(/ \(.*\)/, '') : '–'}
                             {s.q.difficulty !== null ? ` (${s.q.difficulty})` : ''}
-                          </td>
-                          <td style={{ ...tdStyle(i), background: rowBg, fontSize: 11, color: 'var(--fg-muted)', maxWidth: 140 }}>
-                            {s.q.evaluation_point ?? '–'}
                           </td>
                         </tr>
                       );
@@ -774,10 +747,11 @@ export default function ClassAnalysisPage({
                           )}
                           <EvalBadge rate={s.correctRate} />
                         </div>
-                        <div className="flex gap-3 text-xs mb-1.5" style={{ color: 'var(--fg-muted)' }}>
-                          {s.q.question_type && <span>유형: {s.q.question_type}</span>}
-                          {s.q.difficulty !== null && <span>난이도: {s.q.difficulty}</span>}
-                        </div>
+                        {s.q.difficulty !== null && (
+                          <div className="text-xs mb-1.5" style={{ color: 'var(--fg-muted)' }}>
+                            난이도: {s.q.difficulty}
+                          </div>
+                        )}
                         <p className="text-xs" style={{ color: '#7c2d12' }}>{wrongHint(s)}</p>
                       </div>
                       <span
@@ -831,10 +805,11 @@ export default function ClassAnalysisPage({
                             </span>
                           )}
                         </div>
-                        <div className="flex gap-3 text-xs mb-1.5" style={{ color: 'var(--fg-muted)' }}>
-                          {s.q.question_type && <span>유형: {s.q.question_type}</span>}
-                          {s.q.difficulty !== null && <span>난이도: {s.q.difficulty}</span>}
-                        </div>
+                        {s.q.difficulty !== null && (
+                          <div className="text-xs mb-1.5" style={{ color: 'var(--fg-muted)' }}>
+                            난이도: {s.q.difficulty}
+                          </div>
+                        )}
                         <p className="text-xs" style={{ color: '#78350f' }}>{guessHint(s)}</p>
                       </div>
                       <span
@@ -865,24 +840,7 @@ export default function ClassAnalysisPage({
           </section>
         )}
 
-        {/* ⑦ 유형별 분석 */}
-        {!noData && typeMap.size > 0 && (
-          <section
-            className="report-section rounded-xl border p-6"
-            style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
-          >
-            <SectionTitle>유형별 정답률 분석</SectionTitle>
-            <ClassAnalysisTable
-              headers={['유형', '문항 수', '전체 답안 수', '정답 수', '정답률', '평가']}
-              rows={[...typeMap.entries()].map(([name, s]) => {
-                const rate = s.total > 0 ? (s.correct / s.total) * 100 : 0;
-                return { name, total: questions.filter((q) => (q.question_type || '유형 미설정') === name).length, answers: s.total, correct: s.correct, rate };
-              })}
-            />
-          </section>
-        )}
-
-        {/* ⑧ 난이도별 분석 */}
+        {/* ⑦ 난이도별 분석 */}
         {!noData && diffMap.size > 0 && (
           <section
             className="report-section rounded-xl border p-6"
