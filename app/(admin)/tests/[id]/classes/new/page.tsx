@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Save, AlertCircle, Loader2, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { createClassWithTestAssignment } from '@/lib/class-tests';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -85,24 +86,21 @@ export default function NewClassPage({
 
     setSaving(true);
 
-    const { data, error } = await supabase
-      .from('classes')
-      .insert({
-        test_id: testId,
-        class_name: form.class_name.trim(),
-        teacher_name: form.teacher_name.trim() || null,
-        academy_name: form.academy_name.trim() || null,
-      })
-      .select('id')
-      .single();
+    const { classId, error } = await createClassWithTestAssignment(testId, {
+      class_name: form.class_name.trim(),
+      teacher_name: form.teacher_name.trim() || null,
+      academy_name: form.academy_name.trim() || null,
+    });
 
-    if (error || !data) {
-      setSaveError(error?.message ?? '저장 중 알 수 없는 오류가 발생했습니다.');
+    if (!classId) {
+      setSaveError(error ?? '저장 중 알 수 없는 오류가 발생했습니다.');
       setSaving(false);
       return;
     }
 
-    router.push(`/classes/${data.id}/students`);
+    if (error) setSaveError(error);
+
+    router.push(`/classes/${classId}/students`);
   };
 
   // ── 로딩

@@ -139,14 +139,19 @@ export default function TestsPage() {
                         <Edit2 size={14} /> 문항 입력
                       </Button>
                     </Link>
-                    <Link href={`/tests/${test.id}/classes/new`}>
+                    <Link href={`/tests/${test.id}/assign-classes`}>
                       <Button size="sm" variant="outline">
-                        <Users size={14} /> 반 생성
+                        <Users size={14} /> 반에 일괄 부여
                       </Button>
                     </Link>
                     <Link href={`/tests/${test.id}/classes`}>
                       <Button size="sm" variant="accent">
-                        <Users size={14} /> 반 목록
+                        <Users size={14} /> 부여된 반 보기
+                      </Button>
+                    </Link>
+                    <Link href={`/tests/${test.id}/classes/new`}>
+                      <Button size="sm" variant="ghost">
+                        <Users size={14} /> 반 생성
                       </Button>
                     </Link>
                   </div>

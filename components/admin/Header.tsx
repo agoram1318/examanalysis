@@ -18,8 +18,14 @@ const PAGE_TITLES: [string, string][] = [
 
 function getTitle(pathname: string): string {
   // 동적 세그먼트 매핑 (더 구체적인 것 먼저)
+  if (/\/tests\/\d+\/assign-classes/.test(pathname)) return '반에 일괄 부여';
   if (/\/tests\/\d+\/classes\/new/.test(pathname)) return '반 생성';
-  if (/\/tests\/\d+\/classes/.test(pathname)) return '반 목록';
+  if (/\/tests\/\d+\/classes/.test(pathname)) return '부여된 반 목록';
+  if (/\/classes\/new/.test(pathname)) return '새 반 생성';
+  if (/\/classes\/\d+\/assign-tests/.test(pathname)) return '테스트 부여';
+  if (/\/classes\/\d+\/tests\/\d+\/answers/.test(pathname)) return '답안 입력';
+  if (/\/classes\/\d+\/tests\/\d+\/analysis/.test(pathname)) return '반 전체 분석표';
+  if (/\/students\/\d+\/tests\/\d+\/report/.test(pathname)) return '학생별 분석표';
   if (/\/tests\/\d+\/questions/.test(pathname)) return '문항 정보 입력';
   if (/\/classes\/\d+\/students/.test(pathname)) return '학생 등록';
   if (/\/classes\/\d+\/answers/.test(pathname)) return '답안 입력';

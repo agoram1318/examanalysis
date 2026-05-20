@@ -7,6 +7,7 @@ import {
   ChevronRight, AlertCircle, Loader2, GraduationCap,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { fetchClassIdsForTest } from '@/lib/class-tests';
 import { formatDate } from '@/lib/utils';
 import Button from '@/components/ui/Button';
 
@@ -59,11 +60,17 @@ export default function TestClassesPage({
       if (testErr || !testData) { setNotFound(true); setLoading(false); return; }
       setTest(testData);
 
-      // 반 목록 (학생 수 포함)
+      const classIds = await fetchClassIdsForTest(testId);
+      if (classIds.length === 0) {
+        setClasses([]);
+        setLoading(false);
+        return;
+      }
+
       const { data: classesRaw } = await supabase
         .from('classes')
         .select('id, class_name, teacher_name, academy_name, created_at')
-        .eq('test_id', testId)
+        .in('id', classIds)
         .order('created_at', { ascending: false });
 
       const rawList = classesRaw ?? [];
@@ -132,6 +139,11 @@ export default function TestClassesPage({
           <Link href={`/tests/${testId}/questions`}>
             <Button variant="outline" size="sm">
               <PenLine size={14} /> 문항 입력
+            </Button>
+          </Link>
+          <Link href={`/tests/${testId}/assign-classes`}>
+            <Button variant="outline" size="sm">
+              <Plus size={14} /> 반에 일괄 부여
             </Button>
           </Link>
           <Link href={`/tests/${testId}/classes/new`}>
@@ -240,12 +252,12 @@ export default function TestClassesPage({
                           <Users size={13} /> 학생 등록
                         </Button>
                       </Link>
-                      <Link href={`/classes/${cls.id}/answers`}>
+                      <Link href={`/classes/${cls.id}/tests/${testId}/answers`}>
                         <Button size="sm" variant="outline">
                           <PenLine size={13} /> 답안 입력
                         </Button>
                       </Link>
-                      <Link href={`/classes/${cls.id}/analysis`}>
+                      <Link href={`/classes/${cls.id}/tests/${testId}/analysis`}>
                         <Button size="sm" variant="accent">
                           <BarChart3 size={13} /> 전체 분석
                         </Button>

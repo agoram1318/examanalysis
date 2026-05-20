@@ -97,7 +97,7 @@ CREATE INDEX IF NOT EXISTS idx_questions_small_unit_id  ON questions(small_unit_
 -- ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS classes (
   id           BIGSERIAL PRIMARY KEY,
-  test_id      BIGINT      NOT NULL REFERENCES tests(id) ON DELETE CASCADE,
+  test_id      BIGINT      REFERENCES tests(id) ON DELETE SET NULL,  -- 레거시 호환 (신규: class_tests 사용)
   teacher_name TEXT,
   academy_name TEXT,
   class_name   TEXT,
@@ -105,6 +105,22 @@ CREATE TABLE IF NOT EXISTS classes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_classes_test_id ON classes(test_id);
+
+-- ──────────────────────────────────────────────
+-- 7-1. class_tests (반 ↔ 테스트 다대다)
+-- ──────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS class_tests (
+  id          BIGSERIAL PRIMARY KEY,
+  class_id    BIGINT      NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+  test_id     BIGINT      NOT NULL REFERENCES tests(id) ON DELETE CASCADE,
+  assigned_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  UNIQUE (class_id, test_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_class_tests_class_id ON class_tests(class_id);
+CREATE INDEX IF NOT EXISTS idx_class_tests_test_id  ON class_tests(test_id);
 
 -- ──────────────────────────────────────────────
 -- 8. students (학생)
