@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { Plus, ClipboardList, Edit2, Users, Loader2, ChevronRight } from 'lucide-react';
+import { Plus, ClipboardList, Edit2, Users, Loader2, ChevronRight, BarChart3 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/utils';
 
@@ -59,7 +59,7 @@ export default function TestsPage() {
           style={{ background: 'var(--bg-card)', borderColor: 'var(--border)', color: 'var(--fg-muted)' }}
         >
           <span className="font-semibold" style={{ color: 'var(--fg-main)' }}>다음 단계:</span>
-          {['문항 입력', '반 생성', '학생 등록', '답안 입력', '분석표'].map((s, i, arr) => (
+          {['문항 입력', '반 부여', '학생 등록', '답안 입력', '반별 분석', '테스트 전체 분석'].map((s, i, arr) => (
             <span key={s} className="flex items-center gap-1">
               <span
                 className="px-2 py-0.5 rounded-full font-medium"
@@ -147,6 +147,11 @@ export default function TestsPage() {
                     <Link href={`/tests/${test.id}/classes`}>
                       <Button size="sm" variant="accent">
                         <Users size={14} /> 부여된 반 보기
+                      </Button>
+                    </Link>
+                    <Link href={`/tests/${test.id}/analysis`}>
+                      <Button size="sm" variant="outline">
+                        <BarChart3 size={14} /> 테스트 전체 분석
                       </Button>
                     </Link>
                     <Link href={`/tests/${test.id}/classes/new`}>

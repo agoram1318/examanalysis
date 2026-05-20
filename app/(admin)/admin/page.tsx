@@ -81,7 +81,14 @@ const MENUS: MenuCard[] = [
     icon: BarChart3,
     label: '반 전체 분석표',
     desc: '반을 선택하면 오답 TOP5, 찍음 비율, 단원별 정답률을 분석합니다.',
+    href: '/classes',
+  },
+  {
+    icon: TrendingUp,
+    label: '테스트 전체 분석표',
+    desc: '여러 반에 부여된 테스트의 전체 응시 데이터를 통합 분석합니다.',
     href: '/tests',
+    tag: '신규',
   },
   {
     icon: BookOpen,
@@ -335,13 +342,22 @@ export default function AdminDashboardPage() {
                         {subtitle || '정보 없음'} · {formatDate(test.created_at)}
                       </p>
                     </div>
-                    <Link
-                      href={`/tests/${test.id}/classes`}
-                      className="shrink-0 text-xs px-2 py-1 rounded-md font-medium transition-colors hover:opacity-80"
-                      style={{ background: 'var(--accent-lt)', color: 'var(--accent)' }}
-                    >
-                      반 목록
-                    </Link>
+                    <div className="flex gap-1 shrink-0">
+                      <Link
+                        href={`/tests/${test.id}/classes`}
+                        className="text-xs px-2 py-1 rounded-md font-medium transition-colors hover:opacity-80"
+                        style={{ background: 'var(--accent-lt)', color: 'var(--accent)' }}
+                      >
+                        반 목록
+                      </Link>
+                      <Link
+                        href={`/tests/${test.id}/analysis`}
+                        className="text-xs px-2 py-1 rounded-md font-medium transition-colors hover:opacity-80"
+                        style={{ background: '#eff6ff', color: '#2563eb' }}
+                      >
+                        전체 분석
+                      </Link>
+                    </div>
                   </div>
                 );
               })
@@ -467,7 +483,8 @@ export default function AdminDashboardPage() {
             { step: '3', label: '반 생성', href: '/classes' },
             { step: '4', label: '학생 등록', href: '/classes' },
             { step: '5', label: '답안 입력', href: '/classes' },
-            { step: '6', label: '분석표 확인', href: '/tests' },
+            { step: '6', label: '반별 분석', href: '/classes' },
+            { step: '7', label: '테스트 전체 분석', href: '/tests' },
           ].map((item, i, arr) => (
             <div key={item.step} className="flex items-center gap-2">
               <Link

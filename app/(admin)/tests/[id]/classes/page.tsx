@@ -4,7 +4,7 @@ import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, Plus, Users, PenLine, BarChart3,
-  ChevronRight, AlertCircle, Loader2, GraduationCap,
+  ChevronRight, AlertCircle, Loader2, GraduationCap, TrendingUp,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { fetchClassIdsForTest } from '@/lib/class-tests';
@@ -144,6 +144,11 @@ export default function TestClassesPage({
           <Link href={`/tests/${testId}/assign-classes`}>
             <Button variant="outline" size="sm">
               <Plus size={14} /> 반에 일괄 부여
+            </Button>
+          </Link>
+          <Link href={`/tests/${testId}/analysis`}>
+            <Button variant="outline" size="sm">
+              <TrendingUp size={14} /> 테스트 전체 분석
             </Button>
           </Link>
           <Link href={`/tests/${testId}/classes/new`}>
