@@ -9,6 +9,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { fetchTestsForClass } from '@/lib/class-tests';
 import Button from '@/components/ui/Button';
+import PrintReportLink from '@/components/reports/PrintReportLink';
 
 // ─────────────────────────────────────────────
 // 타입 정의
@@ -533,6 +534,7 @@ export default function StudentReportPage({
               <BarChart3 size={14} /> 반 전체 분석 보기
             </Button>
           </Link>
+          <PrintReportLink href={`/students/${studentId}/tests/${testId}/print`} />
           <Button variant="accent" size="sm" onClick={() => window.print()}>
             <Printer size={14} /> 인쇄 / PDF 저장
           </Button>

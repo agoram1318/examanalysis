@@ -9,6 +9,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { fetchTestsForClass } from '@/lib/class-tests';
 import Button from '@/components/ui/Button';
+import PrintReportLink from '@/components/reports/PrintReportLink';
 
 // ─────────────────────────────────────────────
 // 타입
@@ -489,9 +490,12 @@ export default function ClassAnalysisPage({
             <span className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>반 전체 분석</span>
           </div>
         </div>
-        <Button variant="accent" size="sm" onClick={() => window.print()}>
-          <Printer size={14} /> 인쇄 / PDF 저장
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <PrintReportLink href={`/classes/${classId}/tests/${testId}/print`} />
+          <Button variant="accent" size="sm" onClick={() => window.print()}>
+            <Printer size={14} /> 인쇄 / PDF 저장
+          </Button>
+        </div>
       </div>
 
       {/* 인쇄 안내 (화면에서만 표시) */}

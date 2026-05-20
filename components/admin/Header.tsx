@@ -20,7 +20,10 @@ function getTitle(pathname: string): string {
   // 동적 세그먼트 매핑 (더 구체적인 것 먼저)
   if (/\/tests\/\d+\/assign-classes/.test(pathname)) return '반에 일괄 부여';
   if (/\/tests\/\d+\/classes\/new/.test(pathname)) return '반 생성';
+  if (/\/tests\/\d+\/print/.test(pathname)) return '테스트 전체 인쇄 리포트';
   if (/\/tests\/\d+\/analysis/.test(pathname)) return '테스트 전체 분석표';
+  if (/\/classes\/\d+\/tests\/\d+\/print/.test(pathname)) return '반 전체 인쇄 리포트';
+  if (/\/students\/\d+\/tests\/\d+\/print/.test(pathname)) return '학생별 인쇄 리포트';
   if (/\/tests\/\d+\/classes/.test(pathname)) return '부여된 반 목록';
   if (/\/classes\/new/.test(pathname)) return '새 반 생성';
   if (/\/classes\/\d+\/assign-tests/.test(pathname)) return '테스트 부여';

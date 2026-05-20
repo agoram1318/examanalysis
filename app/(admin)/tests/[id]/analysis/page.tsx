@@ -10,6 +10,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { fetchClassIdsForTest } from '@/lib/class-tests';
 import Button from '@/components/ui/Button';
+import PrintReportLink from '@/components/reports/PrintReportLink';
 import {
   buildScoreDistribution,
   computeEstimatedGrade,
@@ -473,9 +474,12 @@ export default function TestWideAnalysisPage({ params }: { params: Promise<{ id:
             <span className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>테스트 전체 분석</span>
           </div>
         </div>
-        <Button variant="accent" size="sm" onClick={() => window.print()}>
-          <Printer size={14} /> 인쇄 / PDF 저장
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <PrintReportLink href={`/tests/${testId}/print`} />
+          <Button variant="accent" size="sm" onClick={() => window.print()}>
+            <Printer size={14} /> 인쇄 / PDF 저장
+          </Button>
+        </div>
       </div>
 
       <div

@@ -1,0 +1,55 @@
+/** 리포트·인쇄 화면 공통 유틸 */
+
+export type UnitRaw = { name: string } | { name: string }[] | null;
+
+export function pickUnitName(raw: unknown): string | null {
+  const u = raw as UnitRaw;
+  if (!u) return null;
+  if (Array.isArray(u)) return u[0]?.name ?? null;
+  return u.name ?? null;
+}
+
+export function evalAchievement(rate: number): { text: string; color: string; bg: string } {
+  if (rate >= 80) return { text: '안정', color: '#15803d', bg: '#f0fdf4' };
+  if (rate >= 60) return { text: '보통', color: '#ca8a04', bg: '#fefce8' };
+  if (rate >= 40) return { text: '보완 필요', color: '#ea580c', bg: '#fff7ed' };
+  return { text: '집중 보완', color: '#dc2626', bg: '#fef2f2' };
+}
+
+export function difficultyGroup(d: number | null): string {
+  if (d === null) return '미설정';
+  if (d <= 2) return '기본 확인 (1~2)';
+  if (d <= 4) return '기본 적용 (3~4)';
+  if (d <= 6) return '중상 난도 (5~6)';
+  return '고난도/킬러 (7~8)';
+}
+
+export function difficultyLabel(d: number | null): string {
+  if (d === null) return '–';
+  if (d <= 2) return `${d} (기본)`;
+  if (d <= 4) return `${d} (적용)`;
+  if (d <= 6) return `${d} (중상)`;
+  return `${d} (고난도)`;
+}
+
+export function difficultyInterpretation(d: number | null): string {
+  if (d === null) return '미설정';
+  if (d <= 2) return '기본 확인';
+  if (d <= 4) return '기본 적용';
+  if (d <= 6) return '중상 난도';
+  return '고난도/킬러';
+}
+
+export const DIFF_ORDER = [
+  '기본 확인 (1~2)',
+  '기본 적용 (3~4)',
+  '중상 난도 (5~6)',
+  '고난도/킬러 (7~8)',
+  '미설정',
+];
+
+export type GroupStat = { name: string; total: number; correct: number };
+
+export function formatReportDate(d = new Date()): string {
+  return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+}
