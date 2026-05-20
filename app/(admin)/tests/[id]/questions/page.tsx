@@ -13,7 +13,6 @@ import Button from '@/components/ui/Button';
 type TestRow = {
   id: number;
   title: string;
-  school_name: string | null;
   grade: string | null;
   subject_id: number | null;
   total_questions: number;
@@ -288,7 +287,7 @@ export default function QuestionsPage({
       // 1. 테스트 정보
       const { data: testData, error: testErr } = await supabase
         .from('tests')
-        .select('id, title, school_name, grade, subject_id, total_questions')
+        .select('id, title, grade, subject_id, total_questions')
         .eq('id', testId)
         .single();
 
@@ -466,7 +465,7 @@ export default function QuestionsPage({
     );
   }
 
-  const subtitle = [test.school_name, test.grade].filter(Boolean).join(' · ');
+  const subtitle = test.grade ?? '';
 
   return (
     <div>
@@ -516,7 +515,6 @@ export default function QuestionsPage({
       >
         {[
           { label: '테스트명', value: test.title },
-          { label: '학교',    value: test.school_name || '–' },
           { label: '학년',    value: test.grade || '–' },
           { label: '총 문항', value: `${test.total_questions}문항` },
         ].map(item => (

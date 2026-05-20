@@ -14,7 +14,6 @@ import { formatDate } from '@/lib/utils';
 type TestRow = {
   id: number;
   title: string;
-  school_name: string | null;
   grade: string | null;
   total_questions: number;
   created_at: string;
@@ -42,7 +41,7 @@ const MENUS: MenuCard[] = [
   {
     icon: ClipboardList,
     label: '테스트 등록',
-    desc: '테스트명, 학교명, 학년, 과목, 시험 범위를 등록합니다.',
+    desc: '테스트명, 학년, 과목, 시험 범위를 등록합니다.',
     href: '/tests/new',
   },
   {
@@ -119,7 +118,7 @@ export default function AdminDashboardPage() {
         supabase.from('student_answers').select('student_id', { count: 'exact', head: true }),
         supabase
           .from('tests')
-          .select('id, title, school_name, grade, total_questions, created_at')
+          .select('id, title, grade, total_questions, created_at')
           .order('created_at', { ascending: false })
           .limit(5),
         supabase
@@ -311,9 +310,7 @@ export default function AdminDashboardPage() {
               </div>
             ) : (
               recentTests.map((test) => {
-                const subtitle = [test.school_name, test.grade]
-                  .filter(Boolean)
-                  .join(' · ');
+                const subtitle = test.grade ?? '';
                 return (
                   <div key={test.id} className="flex items-start gap-3 px-5 py-3.5">
                     <div

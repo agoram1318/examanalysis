@@ -23,7 +23,6 @@ type ClassRow = {
 type TestRow = {
   id: number;
   title: string;
-  school_name: string | null;
   grade: string | null;
   subject_name: string | null;
 };
@@ -226,7 +225,7 @@ export default function ClassAnalysisPage({
       // 2. 테스트
       const { data: testRaw, error: testErr } = await supabase
         .from('tests')
-        .select('id, title, school_name, grade, subjects(name)')
+        .select('id, title, grade, subjects(name)')
         .eq('id', classData.test_id)
         .single();
 
@@ -237,7 +236,7 @@ export default function ClassAnalysisPage({
         if (Array.isArray(s)) return s[0]?.name ?? null;
         return (s as { name: string }).name ?? null;
       })();
-      setTest({ id: testRaw.id, title: testRaw.title, school_name: testRaw.school_name, grade: testRaw.grade, subject_name: subjectName });
+      setTest({ id: testRaw.id, title: testRaw.title, grade: testRaw.grade, subject_name: subjectName });
 
       // 3. 학생 + 문항 (병렬)
       const [studentsRes, questionsRes] = await Promise.all([
@@ -442,7 +441,6 @@ export default function ClassAnalysisPage({
 
   const infoItems = [
     { label: '테스트명',  value: test.title },
-    { label: '학교명',    value: test.school_name || '–' },
     { label: '학년',      value: test.grade || '–' },
     { label: '과목',      value: test.subject_name || '–' },
     { label: '강사명',    value: cls.teacher_name || '–' },

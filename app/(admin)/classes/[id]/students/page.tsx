@@ -19,7 +19,6 @@ type ClassRow = {
   test_id: number;
   tests: {
     title: string;
-    school_name: string | null;
     grade: string | null;
     subjects: { name: string } | null;
   } | null;
@@ -75,7 +74,7 @@ export default function StudentsPage({
       const { data, error } = await supabase
         .from('classes')
         .select(
-          'id, class_name, teacher_name, academy_name, test_id, tests(title, school_name, grade, subjects(name))'
+          'id, class_name, teacher_name, academy_name, test_id, tests(title, grade, subjects(name))'
         )
         .eq('id', classId)
         .single();

@@ -12,7 +12,6 @@ import { formatDate } from '@/lib/utils';
 type TestRow = {
   id: number;
   title: string;
-  school_name: string | null;
   grade: string | null;
   total_questions: number;
   created_at: string;
@@ -26,7 +25,7 @@ export default function TestsPage() {
   useEffect(() => {
     supabase
       .from('tests')
-      .select('id, title, school_name, grade, total_questions, created_at, subjects(name)')
+      .select('id, title, grade, total_questions, created_at, subjects(name)')
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         setTests((data ?? []) as unknown as TestRow[]);
@@ -101,7 +100,7 @@ export default function TestsPage() {
       ) : (
         <div className="space-y-3">
           {tests.map((test) => {
-            const meta = [test.school_name, test.grade].filter(Boolean).join(' · ');
+            const meta = [test.grade, test.subjects?.name].filter(Boolean).join(' · ');
             return (
               <div
                 key={test.id}

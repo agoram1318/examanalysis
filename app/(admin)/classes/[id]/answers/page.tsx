@@ -24,7 +24,6 @@ type ClassRow = {
 type TestRow = {
   id: number;
   title: string;
-  school_name: string | null;
   grade: string | null;
   total_questions: number;
 };
@@ -157,7 +156,7 @@ export default function AnswersPage({
       const [testRes, studentsRes] = await Promise.all([
         supabase
           .from('tests')
-          .select('id, title, school_name, grade, total_questions')
+          .select('id, title, grade, total_questions')
           .eq('id', classData.test_id)
           .single(),
         supabase

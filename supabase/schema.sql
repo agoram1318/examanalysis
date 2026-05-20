@@ -54,7 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_units_small_middle_unit_id ON units_small(middle_
 CREATE TABLE IF NOT EXISTS tests (
   id               BIGSERIAL PRIMARY KEY,
   title            TEXT        NOT NULL,
-  school_name      TEXT,
+  school_name      TEXT,        -- 현재 미사용 (nullable, 기존 데이터 호환)
   grade            TEXT,
   subject_id       BIGINT      REFERENCES subjects(id) ON DELETE SET NULL,
   exam_range_text  TEXT,

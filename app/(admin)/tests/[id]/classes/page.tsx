@@ -16,7 +16,6 @@ import Button from '@/components/ui/Button';
 type TestRow = {
   id: number;
   title: string;
-  school_name: string | null;
   grade: string | null;
   total_questions: number;
 };
@@ -53,7 +52,7 @@ export default function TestClassesPage({
       // 테스트 정보
       const { data: testData, error: testErr } = await supabase
         .from('tests')
-        .select('id, title, school_name, grade, total_questions')
+        .select('id, title, grade, total_questions')
         .eq('id', testId)
         .single();
 
@@ -108,7 +107,7 @@ export default function TestClassesPage({
     );
   }
 
-  const meta = [test.school_name, test.grade].filter(Boolean).join(' · ');
+  const meta = test.grade ?? '';
 
   return (
     <div>

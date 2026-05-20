@@ -14,13 +14,12 @@ import Select from '@/components/ui/Select';
 type SubjectRow = { id: number; name: string };
 
 // ── 폼 필드 키 타입
-type FormKey = 'title' | 'school_name' | 'grade' | 'subject_id' | 'exam_range_text' | 'total_questions';
+type FormKey = 'title' | 'grade' | 'subject_id' | 'exam_range_text' | 'total_questions';
 
 type FormState = Record<FormKey, string>;
 
 const INITIAL_FORM: FormState = {
   title: '',
-  school_name: '',
   grade: '',
   subject_id: '',
   exam_range_text: '',
@@ -92,7 +91,6 @@ export default function NewTestPage() {
       .from('tests')
       .insert({
         title: form.title.trim(),
-        school_name: form.school_name.trim() || null,
         grade: form.grade.trim() || null,
         subject_id: Number(form.subject_id),
         exam_range_text: form.exam_range_text.trim() || null,
@@ -162,21 +160,12 @@ export default function NewTestPage() {
               error={errors.title}
             />
 
-            {/* 학교명 / 학년 */}
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="학교명"
-                placeholder="예: 봉샘고등학교"
-                value={form.school_name}
-                onChange={handleChange('school_name')}
-              />
-              <Input
-                label="학년"
-                placeholder="예: 고1, 2학년"
-                value={form.grade}
-                onChange={handleChange('grade')}
-              />
-            </div>
+            <Input
+              label="학년"
+              placeholder="예: 고1, 2학년"
+              value={form.grade}
+              onChange={handleChange('grade')}
+            />
 
             {/* 과목 */}
             <div className="flex flex-col gap-1">

@@ -30,7 +30,6 @@ type ClassRow = {
 type TestRow = {
   id: number;
   title: string;
-  school_name: string | null;
   grade: string | null;
   subject_name: string | null;
 };
@@ -335,7 +334,7 @@ export default function StudentReportPage({
       // 3. 테스트 (과목 포함)
       const { data: testRaw, error: testErr } = await supabase
         .from('tests')
-        .select('id, title, school_name, grade, subjects(name)')
+        .select('id, title, grade, subjects(name)')
         .eq('id', classData.test_id)
         .single();
 
@@ -352,7 +351,6 @@ export default function StudentReportPage({
       setTest({
         id:           testRaw.id,
         title:        testRaw.title,
-        school_name:  testRaw.school_name,
         grade:        testRaw.grade,
         subject_name: subjectName,
       });
@@ -497,7 +495,6 @@ export default function StudentReportPage({
     { label: '학생명',   value: student.student_name },
     { label: '학생 코드', value: student.student_code || '–' },
     { label: '테스트명', value: test.title },
-    { label: '학교명',   value: test.school_name || '–' },
     { label: '학년',     value: test.grade || '–' },
     { label: '과목',     value: test.subject_name || '–' },
     { label: '강사명',   value: cls.teacher_name || '–' },

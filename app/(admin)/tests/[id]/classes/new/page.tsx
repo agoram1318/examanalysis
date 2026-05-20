@@ -12,7 +12,6 @@ import Input from '@/components/ui/Input';
 type TestRow = {
   id: number;
   title: string;
-  school_name: string | null;
   grade: string | null;
   total_questions: number;
   subjects: { name: string } | null;
@@ -55,7 +54,7 @@ export default function NewClassPage({
     }
     supabase
       .from('tests')
-      .select('id, title, school_name, grade, total_questions, subjects(name)')
+      .select('id, title, grade, total_questions, subjects(name)')
       .eq('id', testId)
       .single()
       .then(({ data, error }) => {
@@ -133,7 +132,7 @@ export default function NewClassPage({
     );
   }
 
-  const subtitle = [test.school_name, test.grade].filter(Boolean).join(' · ');
+  const subtitle = test.grade ?? '';
 
   return (
     <div className="max-w-lg">
@@ -170,7 +169,7 @@ export default function NewClassPage({
         {[
           { label: '테스트명', value: test.title },
           { label: '과목',    value: test.subjects?.name ?? '–' },
-          { label: '학교',    value: test.school_name ?? '–' },
+          { label: '학년',    value: test.grade ?? '–' },
           { label: '총 문항', value: `${test.total_questions}문항` },
         ].map((item) => (
           <div key={item.label} className="flex items-center gap-2 text-sm">
