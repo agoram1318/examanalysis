@@ -258,6 +258,87 @@ function groupStats(items: QA[], keyFn: (qa: QA) => string): GroupStat[] {
   return [...map.values()];
 }
 
+function statRate(stat: GroupStat): number {
+  return stat.total > 0 ? (stat.correct / stat.total) * 100 : 0;
+}
+
+function weakestStat(stats: GroupStat[]): GroupStat | null {
+  const valid = stats.filter((stat) => stat.total > 0);
+  if (valid.length === 0) return null;
+  return [...valid].sort((a, b) => statRate(a) - statRate(b))[0];
+}
+
+function correctRateText(stat: GroupStat | null): string {
+  if (!stat) return '–';
+  return `${statRate(stat).toFixed(1)}%`;
+}
+
+function cleanStatName(name: string): string {
+  return name.replace(/^▶\s*/, '');
+}
+
+function buildCoreDiagnoses(
+  scoreRate: number,
+  weakestUnit: GroupStat | null,
+  weakestDiff: GroupStat | null,
+  guessRate: number
+): string[] {
+  const lines: string[] = [];
+
+  if (scoreRate >= 80) lines.push('기본 문항 대응은 전반적으로 안정적입니다.');
+  else if (scoreRate >= 60) lines.push('기본기는 갖추었지만 일부 단원에서 개념 적용이 흔들립니다.');
+  else lines.push('기본 개념 정리와 쉬운 문항부터의 반복 확인이 우선입니다.');
+
+  if (weakestDiff && statRate(weakestDiff) < 80) {
+    lines.push(`${cleanStatName(weakestDiff.name)} 구간에서 정답률이 낮아 보완이 필요합니다.`);
+  } else {
+    lines.push('난이도 구간별 성취도는 큰 편차 없이 유지되고 있습니다.');
+  }
+
+  if (weakestUnit && statRate(weakestUnit) < 80) {
+    lines.push(`${cleanStatName(weakestUnit.name)} 단원의 오답 원인을 먼저 점검해 주세요.`);
+  } else if (guessRate >= 25) {
+    lines.push('정답 여부와 별개로 찍음 표시가 있어 풀이 근거를 확인하는 훈련이 필요합니다.');
+  } else {
+    lines.push('풀이 확신도와 단원별 균형이 비교적 안정적입니다.');
+  }
+
+  return lines.slice(0, 3);
+}
+
+function buildPrescriptions(
+  weakestUnit: GroupStat | null,
+  weakestDiff: GroupStat | null,
+  wrongCount: number,
+  blankCount: number,
+  guessedCount: number
+): string[] {
+  const lines: string[] = [];
+
+  if (weakestUnit && statRate(weakestUnit) < 80) {
+    lines.push(`${cleanStatName(weakestUnit.name)} 단원의 기본 개념을 먼저 복습하고 대표 예제를 다시 풀어보세요.`);
+  } else {
+    lines.push('정답률이 안정적인 단원은 유지 학습을 하고, 틀린 문항의 풀이 흐름만 다시 확인하세요.');
+  }
+
+  if (weakestDiff && /5~6|7~8|중상|고난/.test(weakestDiff.name)) {
+    lines.push(`${cleanStatName(weakestDiff.name)} 문항은 풀이 전 조건을 정리하고 접근 방향을 쓰는 훈련이 필요합니다.`);
+  } else if (weakestDiff) {
+    lines.push(`${cleanStatName(weakestDiff.name)} 문항은 개념 확인 후 같은 난이도의 유사 문항으로 정확도를 높여 주세요.`);
+  }
+
+  if (wrongCount > 0) {
+    lines.push('오답 문항은 해설 확인 후 유사 문항을 3문항 이상 다시 풀어보는 것을 권장합니다.');
+  }
+  if (blankCount > 0) {
+    lines.push('미응답 문항이 있으므로 쉬운 문항을 먼저 확보하는 시간 배분 연습을 병행해 주세요.');
+  } else if (guessedCount > 0) {
+    lines.push('찍음 표시가 있는 문항은 정답 여부와 관계없이 풀이 근거를 말로 설명해 보세요.');
+  }
+
+  return lines.slice(0, 4);
+}
+
 function generateComment(qaRows: QA[], totalScore: number, totalPossible: number): string {
   const parts: string[] = [];
   const scoreRate = totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0;
@@ -419,6 +500,54 @@ function AnalysisTable({ stats }: { stats: GroupStat[] }) {
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function StatBarList({ stats, emptyText }: { stats: GroupStat[]; emptyText: string }) {
+  if (stats.length === 0) return <EmptyState text={emptyText} />;
+
+  return (
+    <div className="space-y-2">
+      {stats.map((stat) => {
+        const rate = statRate(stat);
+        const ev = evalLabel(rate);
+        return (
+          <div
+            key={stat.name}
+            className="rounded-lg border px-4 py-3"
+            style={{ borderColor: 'var(--border)', background: 'var(--bg-base)' }}
+          >
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold truncate" style={{ color: 'var(--fg-main)' }}>
+                  {cleanStatName(stat.name)}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--fg-muted)' }}>
+                  {stat.correct}/{stat.total}문항 정답
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-sm font-bold" style={{ color: 'var(--fg-main)' }}>
+                  {rate.toFixed(1)}%
+                </span>
+                <span
+                  className="rounded px-2 py-0.5 text-xs font-semibold"
+                  style={{ background: ev.bg, color: ev.color }}
+                >
+                  {ev.text}
+                </span>
+              </div>
+            </div>
+            <div className="h-2.5 overflow-hidden rounded-full" style={{ background: '#e7e5df' }}>
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${Math.min(100, Math.max(0, rate))}%`, background: ev.color }}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -609,6 +738,10 @@ export default function StudentReportPage({
   const diffStatsSorted = [...diffStats].sort(
     (a, b) => DIFF_ORDER.indexOf(a.name) - DIFF_ORDER.indexOf(b.name)
   );
+  const weakestUnit = weakestStat(majorStats);
+  const weakestDiff = weakestStat(diffStatsSorted);
+  const coreDiagnoses = buildCoreDiagnoses(scoreRate, weakestUnit, weakestDiff, guessRate);
+  const prescriptions = buildPrescriptions(weakestUnit, weakestDiff, wrongCount, blankCount, guessedCount);
 
   // 자동 코멘트
   const comment = qaRows.length > 0
@@ -656,17 +789,19 @@ export default function StudentReportPage({
     { label: '반명',     value: cls.class_name || '–' },
   ];
 
-  const summaryCards = [
-    { label: '총점',           value: `${totalScore}점`,        accent: true  },
-    { label: '총 배점',         value: `${totalPossible}점`,     accent: false },
-    { label: '정답 수',         value: `${correctCount}개`,      accent: false },
-    { label: '오답 수',         value: `${wrongCount}개`,        accent: false },
-    { label: '미응답 수',       value: `${blankCount}개`,        accent: false },
-    { label: '찍은 문항',       value: `${guessedCount}개`,      accent: false },
-    { label: '찍어서 맞음',     value: `${guessedCorrect}개`,    accent: false },
-    { label: '찍어서 틀림',     value: `${guessedWrong}개`,      accent: false },
-    { label: '정답률',          value: `${scoreRate.toFixed(1)}%`, accent: true },
-    { label: '찍음 비율',       value: `${guessRate.toFixed(1)}%`, accent: false },
+  const primaryCards = [
+    { label: '총점', value: `${totalScore} / ${totalPossible}점`, sub: '획득 점수', accent: true },
+    { label: '정답률', value: `${scoreRate.toFixed(1)}%`, sub: `${correctCount}/${qaRows.length}문항`, accent: true },
+    { label: '취약 단원', value: weakestUnit ? cleanStatName(weakestUnit.name) : '–', sub: correctRateText(weakestUnit), accent: false },
+    { label: '보완 난이도', value: weakestDiff ? cleanStatName(weakestDiff.name) : '–', sub: correctRateText(weakestDiff), accent: false },
+  ];
+  const secondaryMetrics = [
+    { label: '정답 수', value: `${correctCount}개` },
+    { label: '오답 수', value: `${wrongCount}개` },
+    { label: '미응답 수', value: `${blankCount}개` },
+    { label: '찍음 수', value: `${guessedCount}개` },
+    { label: '찍어서 맞음', value: `${guessedCorrect}개` },
+    { label: '찍어서 틀림', value: `${guessedWrong}개` },
   ];
 
   const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -777,33 +912,68 @@ export default function StudentReportPage({
           {/* ① 종합 결과 카드 */}
           <section className="report-section">
             <SectionTitle>종합 결과</SectionTitle>
-            <div
-              className="grid gap-3"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}
-            >
-              {summaryCards.map((card) => (
+            <div className="grid gap-3 md:grid-cols-4">
+              {primaryCards.map((card) => (
                 <div
                   key={card.label}
-                  className="rounded-xl p-4 text-center"
+                  className="rounded-xl p-4"
                   style={{
                     background: card.accent ? 'var(--accent)' : 'var(--bg-base)',
                     border: `1px solid ${card.accent ? 'var(--accent)' : 'var(--border)'}`,
                   }}
                 >
                   <p
-                    className="text-xs font-medium mb-1.5"
+                    className="text-xs font-medium mb-2"
                     style={{ color: card.accent ? 'rgba(255,255,255,0.8)' : 'var(--fg-muted)' }}
                   >
                     {card.label}
                   </p>
                   <p
-                    className="text-xl font-bold"
+                    className="text-xl font-bold leading-tight"
                     style={{ color: card.accent ? '#fff' : 'var(--fg-main)' }}
                   >
                     {card.value}
                   </p>
+                  <p
+                    className="mt-1 text-xs"
+                    style={{ color: card.accent ? 'rgba(255,255,255,0.75)' : 'var(--fg-muted)' }}
+                  >
+                    {card.sub}
+                  </p>
                 </div>
               ))}
+            </div>
+            <div
+              className="mt-3 grid gap-2"
+              style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(96px, 1fr))' }}
+            >
+              {secondaryMetrics.map((metric) => (
+                <div
+                  key={metric.label}
+                  className="rounded-lg border px-3 py-2"
+                  style={{ background: '#fafaf9', borderColor: 'var(--border)' }}
+                >
+                  <p className="text-[11px]" style={{ color: 'var(--fg-muted)' }}>{metric.label}</p>
+                  <p className="text-sm font-bold" style={{ color: 'var(--fg-main)' }}>{metric.value}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="report-section">
+            <SectionTitle>핵심 진단</SectionTitle>
+            <div
+              className="rounded-xl px-5 py-4"
+              style={{ background: 'var(--bg-base)', border: '1px solid var(--border)' }}
+            >
+              <ul className="space-y-2">
+                {coreDiagnoses.map((line) => (
+                  <li key={line} className="flex gap-2 text-sm leading-relaxed" style={{ color: 'var(--fg-main)' }}>
+                    <CheckCircle2 size={15} className="mt-0.5 shrink-0" style={{ color: 'var(--accent)' }} />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </section>
 
@@ -814,6 +984,7 @@ export default function StudentReportPage({
               <EmptyState text="문항에 단원 정보가 입력되지 않았습니다." />
             ) : (
               <div className="space-y-3">
+                <StatBarList stats={majorStats} emptyText="단원 정보가 없습니다." />
                 <AnalysisTable
                   stats={majorStats.map((s) => ({ ...s, name: `▶ ${s.name}` }))}
                 />
@@ -830,12 +1001,32 @@ export default function StudentReportPage({
             {diffStatsSorted.length === 0 ? (
               <EmptyState text="문항에 난이도 정보가 입력되지 않았습니다." />
             ) : (
-              <AnalysisTable stats={diffStatsSorted} />
+              <div className="space-y-3">
+                <StatBarList stats={diffStatsSorted} emptyText="난이도 정보가 없습니다." />
+                <AnalysisTable stats={diffStatsSorted} />
+              </div>
             )}
           </section>
 
+          <section className="report-section">
+            <SectionTitle>추천 학습 처방</SectionTitle>
+            <div
+              className="rounded-xl px-5 py-4"
+              style={{ background: '#f8fafc', border: '1px solid var(--border)' }}
+            >
+              <ul className="space-y-2">
+                {prescriptions.map((line) => (
+                  <li key={line} className="flex gap-2 text-sm leading-relaxed" style={{ color: 'var(--fg-main)' }}>
+                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full shrink-0" style={{ background: 'var(--accent)' }} />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+
           {/* ⑤ 문항별 결과표 */}
-          <section className="report-section page-break-before">
+          <section className={`report-section ${qaRows.length > 10 ? 'page-break-before' : ''}`}>
             <SectionTitle>문항별 결과</SectionTitle>
             <QuestionTable qaRows={qaRows} />
           </section>
