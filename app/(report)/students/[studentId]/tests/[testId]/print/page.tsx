@@ -53,23 +53,155 @@ function groupStats(items: QA[], keyFn: (qa: QA) => string): GroupStat[] {
   return [...map.values()];
 }
 
-function wrongQuestionComment(qa: QA): string {
-  const comment = qa.question_comment?.trim();
-  if (comment) {
-    return `${qa.question_number}번 문항은 '${comment}'으로 분류됩니다. 해당 문항에서 오답이 발생했으므로 조건과 풀이 과정을 다시 정리하는 훈련이 필요합니다.`;
-  }
+type QuestionStatus = 'wrong' | 'guessed_wrong' | 'guessed_correct' | 'blank';
+type FeatureKind = 'condition' | 'calculation' | 'high' | 'concept' | 'visual' | 'application' | 'general';
 
-  const unit = qa.small_unit_name || qa.middle_unit_name || qa.major_unit_name || '해당 단원';
-  return `${unit} 단원의 ${difficultyGroup(qa.difficulty)} 문항에서 오답이 발생했습니다. 해당 단원의 개념 적용 훈련이 필요합니다.`;
+type FeatureFocus = {
+  kind: FeatureKind;
+  focus: string;
+  action: string;
+};
+
+function unitFallback(qa: QA): string {
+  return qa.small_unit_name || qa.middle_unit_name || qa.major_unit_name || '해당 단원';
 }
 
-function guessedQuestionComment(qa: QA): string {
-  const comment = qa.question_comment?.trim();
-  if (comment) {
-    return `${qa.question_number}번 문항은 '${comment}'으로 분류됩니다. 찍음 표시가 있으므로 풀이 근거를 끝까지 세우는 연습이 필요합니다.`;
+function getQuestionStatus(qa: QA): QuestionStatus | null {
+  if (!qa.ans || qa.ans.is_blank || !qa.ans.selected_answer) return 'blank';
+  if (qa.ans.is_guessed && qa.ans.is_correct) return 'guessed_correct';
+  if (qa.ans.is_guessed && !qa.ans.is_correct) return 'guessed_wrong';
+  if (!qa.ans.is_correct) return 'wrong';
+  return null;
+}
+
+function featureFocusFromComment(comment: string): FeatureFocus {
+  if (/조건|해석|읽/.test(comment)) {
+    return {
+      kind: 'condition',
+      focus: '조건을 읽고 풀이 방향을 잡는 과정',
+      action: '문제 조건을 식으로 정리하고 풀이 흐름을 먼저 세우는 연습',
+    };
+  }
+  if (/계산|실수|검산/.test(comment)) {
+    return {
+      kind: 'calculation',
+      focus: '계산 과정의 정확성과 검산',
+      action: '중간 계산을 차분히 기록하고 검산하는 습관',
+    };
+  }
+  if (/중상|고난|난도|변별|킬러/.test(comment)) {
+    return {
+      kind: 'high',
+      focus: '풀이 방향을 스스로 세우는 과정',
+      action: '처음 접근 전략을 세우고 필요한 개념을 연결하는 훈련',
+    };
+  }
+  if (/개념|정의|원리/.test(comment)) {
+    return {
+      kind: 'concept',
+      focus: '핵심 개념을 정확히 적용하는 과정',
+      action: '개념의 의미와 적용 조건을 다시 확인하는 연습',
+    };
+  }
+  if (/그래프|도형|그림|좌표/.test(comment)) {
+    return {
+      kind: 'visual',
+      focus: '그림과 식을 연결해 해석하는 과정',
+      action: '조건을 시각화하고 식과 연결하는 연습',
+    };
+  }
+  if (/활용|응용|서술|추론/.test(comment)) {
+    return {
+      kind: 'application',
+      focus: '개념을 새로운 상황에 적용하는 과정',
+      action: '문제 상황을 단원 개념과 연결하는 훈련',
+    };
+  }
+  return {
+    kind: 'general',
+    focus: '풀이 방향을 차분히 정리하는 과정',
+    action: '문제에서 요구하는 조건과 풀이 단계를 정리하는 연습',
+  };
+}
+
+function fallbackQuestionComment(qa: QA, status: QuestionStatus): string {
+  const unit = unitFallback(qa);
+  const difficulty = qa.difficulty === null ? difficultyGroup(qa.difficulty) : `난이도 ${qa.difficulty}`;
+
+  if (status === 'guessed_correct') {
+    return `${qa.question_number}번 문항은 ${unit} 단원의 ${difficulty} 문항입니다. 정답은 맞혔지만 찍음 체크가 있어 풀이 과정의 안정성을 다시 확인하는 것이 좋습니다.`;
+  }
+  if (status === 'guessed_wrong') {
+    return `${qa.question_number}번 문항은 ${unit} 단원의 ${difficulty} 문항에서 찍음 체크와 오답이 함께 나타났습니다. 개념 적용 과정과 풀이 시작점을 다시 점검할 필요가 있습니다.`;
+  }
+  if (status === 'blank') {
+    return `${qa.question_number}번 문항은 ${unit} 단원의 ${difficulty} 문항이 미응답으로 남았습니다. 시간 배분과 문제 접근 순서를 함께 점검해 주세요.`;
   }
 
-  return `${qa.question_number}번 문항은 ${difficultyGroup(qa.difficulty)} 문항입니다. 찍음 표시가 있으므로 풀이 접근을 점검해 주세요.`;
+  return `${qa.question_number}번 문항은 ${unit} 단원의 ${difficulty} 문항에서 오답이 발생했습니다. 해당 단원의 개념 적용 과정과 풀이 흐름을 다시 점검할 필요가 있습니다.`;
+}
+
+function questionLearningComment(qa: QA, status: QuestionStatus): string {
+  const comment = qa.question_comment?.trim();
+  if (!comment) {
+    return fallbackQuestionComment(qa, status);
+  }
+
+  const feature = featureFocusFromComment(comment);
+  const base = `${qa.question_number}번 문항은 ${feature.focus}이 중요했습니다.`;
+
+  if (status === 'guessed_correct') {
+    return `${base} 정답은 맞혔지만 찍음 체크가 있어 실력 안정성이 충분하다고 보기는 어렵습니다. ${feature.action}이 도움이 됩니다.`;
+  }
+  if (status === 'guessed_wrong') {
+    return `${base} 찍음 체크와 오답이 함께 나타난 것으로 보아 풀이 방향을 잡기 전 단계에서 어려움이 있었을 가능성이 큽니다. ${feature.action}이 필요합니다.`;
+  }
+  if (status === 'blank') {
+    return `${base} 미응답으로 남은 만큼 시간 배분 또는 문제 접근 단계에서 어려움이 있었을 가능성이 있습니다. ${feature.action}부터 보완해 주세요.`;
+  }
+
+  return `${base} 오답이 발생한 것으로 보아 단순 확인보다 ${feature.action}이 필요합니다.`;
+}
+
+function summarizeQuestionCommentTrends(qaRows: QA[]): string | null {
+  const targetRows = qaRows.filter((qa) => getQuestionStatus(qa) && qa.question_comment?.trim());
+  if (targetRows.length === 0) return null;
+
+  const counts = new Map<FeatureKind, number>();
+  targetRows.forEach((qa) => {
+    const comment = qa.question_comment?.trim();
+    if (!comment) return;
+    const kind = featureFocusFromComment(comment).kind;
+    counts.set(kind, (counts.get(kind) ?? 0) + 1);
+  });
+
+  const topKind = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'general';
+  const hasHighDifficulty = targetRows.some((qa) => {
+    const comment = qa.question_comment?.trim() ?? '';
+    return qa.difficulty !== null && qa.difficulty >= 5 || /중상|고난|난도|변별|킬러/.test(comment);
+  });
+
+  let summary: string;
+  if (topKind === 'condition') {
+    summary = '조건을 해석하고 식으로 정리하는 문항에서 보완이 필요합니다.';
+  } else if (topKind === 'calculation') {
+    summary = '계산 정확도와 풀이 과정 점검에서 실점 가능성이 보입니다.';
+  } else if (topKind === 'concept') {
+    summary = '핵심 개념을 문제 상황에 맞게 적용하는 연습이 필요합니다.';
+  } else if (topKind === 'visual') {
+    summary = '그래프나 도형 정보를 식과 연결해 해석하는 과정에서 보완이 필요합니다.';
+  } else if (topKind === 'application') {
+    summary = '익숙하지 않은 상황에 개념을 적용하는 문항에서 흔들림이 나타났습니다.';
+  } else if (topKind === 'high') {
+    summary = '풀이 방향을 먼저 세워야 하는 변별 문항에서 보완이 필요합니다.';
+  } else {
+    summary = '문제 조건을 정리하고 풀이 단계를 차분히 세우는 훈련이 필요합니다.';
+  }
+
+  if (hasHighDifficulty) {
+    return `${summary} 특히 중상 난도 문항에서는 계산을 시작하기 전에 접근 방향을 먼저 세우는 훈련이 중요합니다.`;
+  }
+  return summary;
 }
 
 function generateComment(qaRows: QA[], totalScore: number, totalPossible: number): string {
@@ -92,6 +224,11 @@ function generateComment(qaRows: QA[], totalScore: number, totalPossible: number
 
   if (guessedCount > 0 && guessedCorrect / guessedCount > 0.5) {
     parts.push('맞힌 문항도 풀이 과정을 점검할 필요가 있습니다.');
+  }
+
+  const trendComment = summarizeQuestionCommentTrends(qaRows);
+  if (trendComment) {
+    parts.push(trendComment);
   }
 
   const lastQ = qaRows.slice(Math.floor(qaRows.length * 0.75));
@@ -261,13 +398,7 @@ export default function StudentPrintPage({
   );
 
   const comment = qaRows.length > 0 ? generateComment(qaRows, totalScore, totalPossible) : '';
-  const questionCommentPoints = qaRows.filter((qa) =>
-    qa.question_comment?.trim() &&
-    (
-      (qa.ans && !qa.ans.is_correct && !qa.ans.is_blank && qa.ans.selected_answer) ||
-      qa.ans?.is_guessed
-    )
-  );
+  const questionCommentPoints = qaRows.filter((qa) => getQuestionStatus(qa));
   const today = formatReportDate();
   const backHref = `/students/${studentId}/tests/${testId}/report`;
 
@@ -391,7 +522,7 @@ export default function StudentPrintPage({
                 {questionCommentPoints.map((qa) => (
                   <li key={qa.id} className="text-sm leading-relaxed">
                     <span className="font-semibold">{qa.question_number}번:</span>{' '}
-                    {qa.ans?.is_guessed ? guessedQuestionComment(qa) : wrongQuestionComment(qa)}
+                    {questionLearningComment(qa, getQuestionStatus(qa) ?? 'wrong')}
                   </li>
                 ))}
               </ul>
