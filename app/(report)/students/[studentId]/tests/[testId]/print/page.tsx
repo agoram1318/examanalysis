@@ -164,7 +164,10 @@ function questionLearningComment(qa: QA, status: QuestionStatus): string {
 }
 
 function summarizeQuestionCommentTrends(qaRows: QA[]): string | null {
-  const targetRows = qaRows.filter((qa) => getQuestionStatus(qa) && qa.question_comment?.trim());
+  const targetRows = qaRows.filter((qa) => {
+    const status = getQuestionStatus(qa);
+    return status !== null && status !== 'guessed_correct' && qa.question_comment?.trim();
+  });
   if (targetRows.length === 0) return null;
 
   const counts = new Map<FeatureKind, number>();
