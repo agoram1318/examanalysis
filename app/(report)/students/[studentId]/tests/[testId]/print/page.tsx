@@ -39,6 +39,12 @@ type QA = {
   } | null;
 };
 
+type CauseStat = {
+  name: string;
+  count: number;
+  color: string;
+};
+
 function groupStats(items: QA[], keyFn: (qa: QA) => string): GroupStat[] {
   const map = new Map<string, GroupStat>();
   items.forEach((qa) => {
@@ -68,6 +74,41 @@ function correctRateText(stat: GroupStat | null): string {
 
 function cleanStatName(name: string): string {
   return name.replace(/^▶\s*/, '');
+}
+
+function scoreTone(rate: number): { color: string; bg: string; text: string } {
+  if (rate >= 80) return { color: '#15803d', bg: '#f0fdf4', text: '안정' };
+  if (rate >= 60) return { color: '#f97316', bg: '#fff7ed', text: '보통' };
+  if (rate >= 40) return { color: '#ea580c', bg: '#fff7ed', text: '보완 필요' };
+  return { color: '#dc2626', bg: '#fef2f2', text: '집중 보완' };
+}
+
+function buildCauseStats(qaRows: QA[]): CauseStat[] {
+  const causes: CauseStat[] = [
+    { name: '단원 개념 보완', count: 0, color: '#f97316' },
+    { name: '난이도 대응 부족', count: 0, color: '#dc2626' },
+    { name: '조건 해석/풀이 방향', count: 0, color: '#7c3aed' },
+    { name: '찍음/확신 부족', count: 0, color: '#ca8a04' },
+    { name: '미응답/시간 관리', count: 0, color: '#64748b' },
+  ];
+  const byName = new Map(causes.map((cause) => [cause.name, cause]));
+
+  qaRows.forEach((qa) => {
+    const status = getQuestionStatus(qa);
+    if (!status || status === 'guessed_correct') return;
+
+    const comment = qa.question_comment?.trim() ?? '';
+    let name = '단원 개념 보완';
+    if (qa.ans?.is_blank || !qa.ans?.selected_answer) name = '미응답/시간 관리';
+    else if (qa.ans?.is_guessed) name = '찍음/확신 부족';
+    else if (/조건|해석|식\s*정리|풀이\s*방향/.test(comment)) name = '조건 해석/풀이 방향';
+    else if (qa.difficulty !== null && qa.difficulty >= 5) name = '난이도 대응 부족';
+
+    const cause = byName.get(name);
+    if (cause) cause.count += 1;
+  });
+
+  return causes.filter((cause) => cause.count > 0);
 }
 
 function buildCoreDiagnoses(
@@ -382,6 +423,103 @@ function StatBarList({ stats, emptyText }: { stats: GroupStat[]; emptyText: stri
   );
 }
 
+function AccuracyGauge({
+  rate,
+  correct,
+  total,
+}: {
+  rate: number;
+  correct: number;
+  total: number;
+}) {
+  const tone = scoreTone(rate);
+  const clamped = Math.min(100, Math.max(0, rate));
+
+  return (
+    <div className="rounded-lg border p-3 text-center" style={{ background: tone.bg, borderColor: 'var(--border)' }}>
+      <div
+        className="relative mx-auto h-24 w-24 rounded-full"
+        style={{ background: `conic-gradient(${tone.color} ${clamped * 3.6}deg, #e7e5df 0deg)` }}
+      >
+        <div className="absolute inset-2.5 flex flex-col items-center justify-center rounded-full bg-white">
+          <span className="text-xl font-bold" style={{ color: tone.color }}>{rate.toFixed(1)}%</span>
+          <span className="text-[10px] font-semibold text-stone-500">{tone.text}</span>
+        </div>
+      </div>
+      <p className="mt-2 text-xs font-semibold text-stone-900">{correct}/{total}문항 정답</p>
+    </div>
+  );
+}
+
+function CauseDistribution({ causes }: { causes: CauseStat[] }) {
+  const total = causes.reduce((sum, cause) => sum + cause.count, 0);
+  if (total === 0) return <p className="report-empty">오답 또는 미응답 문항이 없습니다.</p>;
+
+  return (
+    <div className="rounded-lg border bg-stone-50 px-3 py-3" style={{ borderColor: 'var(--border)' }}>
+      <div className="space-y-2">
+        {causes.map((cause) => {
+          const rate = total > 0 ? (cause.count / total) * 100 : 0;
+          return (
+            <div key={cause.name}>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-stone-900">{cause.name}</span>
+                <span className="text-[11px] font-bold text-stone-600">{cause.count}개 · {rate.toFixed(0)}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-stone-200">
+                <div className="h-full rounded-full" style={{ width: `${Math.max(6, rate)}%`, background: cause.color }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AchievementCards({
+  stats,
+  emptyText,
+  variant = 'unit',
+}: {
+  stats: GroupStat[];
+  emptyText: string;
+  variant?: 'unit' | 'difficulty';
+}) {
+  if (stats.length === 0) return <p className="report-empty">{emptyText}</p>;
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {stats.map((stat) => {
+        const rate = statRate(stat);
+        const tone = scoreTone(rate);
+        return (
+          <div key={stat.name} className="rounded-lg border bg-white p-3" style={{ borderColor: 'var(--border)' }}>
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-bold text-stone-950">{cleanStatName(stat.name)}</p>
+                <p className="mt-0.5 text-[10px] text-stone-500">
+                  {variant === 'difficulty' ? '난이도 구간' : '단원'} · {stat.correct}/{stat.total}문항
+                </p>
+              </div>
+              <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: tone.bg, color: tone.color }}>
+                {tone.text}
+              </span>
+            </div>
+            <div className="mb-1.5 flex items-end justify-between">
+              <span className="text-lg font-bold" style={{ color: tone.color }}>{rate.toFixed(1)}%</span>
+              <span className="text-[10px] text-stone-500">정답률</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-stone-200">
+              <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, rate))}%`, background: tone.color }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function StudentPrintPage({
   params,
 }: {
@@ -544,6 +682,7 @@ export default function StudentPrintPage({
   const weakestDiff = weakestStat(diffStats);
   const coreDiagnoses = buildCoreDiagnoses(scoreRate, weakestUnit, weakestDiff, guessRate);
   const prescriptions = buildPrescriptions(weakestUnit, weakestDiff, wrongCount, blankCount, guessedCount);
+  const causeStats = buildCauseStats(qaRows);
 
   const comment = qaRows.length > 0 ? generateComment(qaRows, totalScore, totalPossible) : '';
   const questionCommentPoints = qaRows.filter((qa) => getQuestionStatus(qa));
@@ -582,11 +721,14 @@ export default function StudentPrintPage({
         />
         <div className="report-page-body">
           <ReportSection title="종합 결과">
-            <div className="grid grid-cols-4 gap-2">
-              <MiniSummaryCard label="총점" value={`${totalScore} / ${totalPossible}점`} sub="획득 점수" accent />
-              <MiniSummaryCard label="정답률" value={`${scoreRate.toFixed(1)}%`} sub={`${correctCount}/${qaRows.length}문항`} accent />
-              <MiniSummaryCard label="취약 단원" value={weakestUnit ? cleanStatName(weakestUnit.name) : '–'} sub={correctRateText(weakestUnit)} />
-              <MiniSummaryCard label="보완 난이도" value={weakestDiff ? cleanStatName(weakestDiff.name) : '–'} sub={correctRateText(weakestDiff)} />
+            <div className="grid grid-cols-[120px_1fr] gap-2">
+              <AccuracyGauge rate={scoreRate} correct={correctCount} total={qaRows.length} />
+              <div className="grid grid-cols-2 gap-2">
+                <MiniSummaryCard label="총점" value={`${totalScore} / ${totalPossible}점`} sub="획득 점수" accent />
+                <MiniSummaryCard label="정답률" value={`${scoreRate.toFixed(1)}%`} sub={`${correctCount}/${qaRows.length}문항`} accent />
+                <MiniSummaryCard label="취약 단원" value={weakestUnit ? cleanStatName(weakestUnit.name) : '–'} sub={correctRateText(weakestUnit)} />
+                <MiniSummaryCard label="보완 난이도" value={weakestDiff ? cleanStatName(weakestDiff.name) : '–'} sub={correctRateText(weakestDiff)} />
+              </div>
             </div>
             <div className="mt-2 grid grid-cols-6 gap-1.5">
               {[
@@ -603,6 +745,10 @@ export default function StudentPrintPage({
                 </div>
               ))}
             </div>
+          </ReportSection>
+
+          <ReportSection title="오답 원인 분포">
+            <CauseDistribution causes={causeStats} />
           </ReportSection>
 
           <ReportSection title="핵심 진단">
@@ -624,7 +770,7 @@ export default function StudentPrintPage({
               <p className="report-empty">단원 정보가 없습니다.</p>
             ) : (
               <div className="space-y-3">
-                <StatBarList stats={majorStats} emptyText="단원 정보가 없습니다." />
+                <AchievementCards stats={majorStats} emptyText="단원 정보가 없습니다." />
                 {middleStats.length > 0 && <StatBarList stats={middleStats} emptyText="중단원 정보가 없습니다." />}
               </div>
             )}
@@ -634,7 +780,7 @@ export default function StudentPrintPage({
             {diffStats.length === 0 ? (
               <p className="report-empty">난이도 정보가 없습니다.</p>
             ) : (
-              <StatBarList stats={diffStats} emptyText="난이도 정보가 없습니다." />
+              <AchievementCards stats={diffStats} emptyText="난이도 정보가 없습니다." variant="difficulty" />
             )}
           </ReportSection>
 

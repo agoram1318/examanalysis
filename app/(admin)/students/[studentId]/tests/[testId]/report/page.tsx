@@ -246,6 +246,12 @@ function summarizeQuestionCommentTrends(qaRows: QA[]): string | null {
 
 interface GroupStat { name: string; total: number; correct: number }
 
+type CauseStat = {
+  name: string;
+  count: number;
+  color: string;
+};
+
 function groupStats(items: QA[], keyFn: (qa: QA) => string): GroupStat[] {
   const map = new Map<string, GroupStat>();
   items.forEach((qa) => {
@@ -275,6 +281,41 @@ function correctRateText(stat: GroupStat | null): string {
 
 function cleanStatName(name: string): string {
   return name.replace(/^▶\s*/, '');
+}
+
+function scoreTone(rate: number): { color: string; bg: string; text: string } {
+  if (rate >= 80) return { color: '#15803d', bg: '#f0fdf4', text: '안정' };
+  if (rate >= 60) return { color: '#f97316', bg: '#fff7ed', text: '보통' };
+  if (rate >= 40) return { color: '#ea580c', bg: '#fff7ed', text: '보완 필요' };
+  return { color: '#dc2626', bg: '#fef2f2', text: '집중 보완' };
+}
+
+function buildCauseStats(qaRows: QA[]): CauseStat[] {
+  const causes: CauseStat[] = [
+    { name: '단원 개념 보완', count: 0, color: '#f97316' },
+    { name: '난이도 대응 부족', count: 0, color: '#dc2626' },
+    { name: '조건 해석/풀이 방향', count: 0, color: '#7c3aed' },
+    { name: '찍음/확신 부족', count: 0, color: '#ca8a04' },
+    { name: '미응답/시간 관리', count: 0, color: '#64748b' },
+  ];
+  const byName = new Map(causes.map((cause) => [cause.name, cause]));
+
+  qaRows.forEach((qa) => {
+    const status = getQuestionStatus(qa);
+    if (!status || status === 'guessed_correct') return;
+
+    const comment = qa.question_comment?.trim() ?? '';
+    let name = '단원 개념 보완';
+    if (qa.ans?.is_blank || !qa.ans?.selected_answer) name = '미응답/시간 관리';
+    else if (qa.ans?.is_guessed) name = '찍음/확신 부족';
+    else if (/조건|해석|식\s*정리|풀이\s*방향/.test(comment)) name = '조건 해석/풀이 방향';
+    else if (qa.difficulty !== null && qa.difficulty >= 5) name = '난이도 대응 부족';
+
+    const cause = byName.get(name);
+    if (cause) cause.count += 1;
+  });
+
+  return causes.filter((cause) => cause.count > 0);
 }
 
 function buildCoreDiagnoses(
@@ -552,6 +593,136 @@ function StatBarList({ stats, emptyText }: { stats: GroupStat[]; emptyText: stri
   );
 }
 
+function AccuracyGauge({
+  rate,
+  correct,
+  total,
+}: {
+  rate: number;
+  correct: number;
+  total: number;
+}) {
+  const tone = scoreTone(rate);
+  const clamped = Math.min(100, Math.max(0, rate));
+
+  return (
+    <div
+      className="report-visual-card flex flex-col items-center justify-center rounded-xl border p-4"
+      style={{ background: tone.bg, borderColor: 'var(--border)' }}
+    >
+      <div
+        className="relative h-28 w-28 rounded-full"
+        style={{
+          background: `conic-gradient(${tone.color} ${clamped * 3.6}deg, #e7e5df 0deg)`,
+        }}
+      >
+        <div className="absolute inset-3 flex flex-col items-center justify-center rounded-full bg-white">
+          <span className="text-2xl font-bold" style={{ color: tone.color }}>
+            {rate.toFixed(1)}%
+          </span>
+          <span className="text-[11px] font-semibold" style={{ color: 'var(--fg-muted)' }}>
+            {tone.text}
+          </span>
+        </div>
+      </div>
+      <p className="mt-3 text-sm font-semibold" style={{ color: 'var(--fg-main)' }}>
+        {correct}/{total}문항 정답
+      </p>
+      <p className="mt-1 text-xs text-center" style={{ color: 'var(--fg-muted)' }}>
+        전체 문항 기준 정답률
+      </p>
+    </div>
+  );
+}
+
+function CauseDistribution({ causes }: { causes: CauseStat[] }) {
+  const total = causes.reduce((sum, cause) => sum + cause.count, 0);
+  if (total === 0) {
+    return <EmptyState text="오답 또는 미응답 문항이 없습니다." />;
+  }
+
+  return (
+    <div className="report-visual-card rounded-xl border p-4" style={{ background: 'var(--bg-base)', borderColor: 'var(--border)' }}>
+      <div className="space-y-3">
+        {causes.map((cause) => {
+          const rate = total > 0 ? (cause.count / total) * 100 : 0;
+          return (
+            <div key={cause.name}>
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold" style={{ color: 'var(--fg-main)' }}>{cause.name}</span>
+                <span className="text-xs font-bold" style={{ color: 'var(--fg-sub)' }}>
+                  {cause.count}개 · {rate.toFixed(0)}%
+                </span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full" style={{ background: '#e7e5df' }}>
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${Math.max(6, rate)}%`, background: cause.color }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AchievementCards({
+  stats,
+  emptyText,
+  variant = 'unit',
+}: {
+  stats: GroupStat[];
+  emptyText: string;
+  variant?: 'unit' | 'difficulty';
+}) {
+  if (stats.length === 0) return <EmptyState text={emptyText} />;
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {stats.map((stat) => {
+        const rate = statRate(stat);
+        const tone = scoreTone(rate);
+        return (
+          <div
+            key={stat.name}
+            className="report-visual-card rounded-xl border p-4"
+            style={{ background: '#fff', borderColor: 'var(--border)' }}
+          >
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold" style={{ color: 'var(--fg-main)' }}>
+                  {cleanStatName(stat.name)}
+                </p>
+                <p className="mt-1 text-xs" style={{ color: 'var(--fg-muted)' }}>
+                  {variant === 'difficulty' ? '난이도 구간' : '단원 성취도'} · {stat.correct}/{stat.total}문항
+                </p>
+              </div>
+              <span
+                className="rounded px-2 py-1 text-xs font-semibold"
+                style={{ background: tone.bg, color: tone.color }}
+              >
+                {tone.text}
+              </span>
+            </div>
+            <div className="mb-2 flex items-end justify-between">
+              <span className="text-2xl font-bold" style={{ color: tone.color }}>{rate.toFixed(1)}%</span>
+              <span className="text-xs" style={{ color: 'var(--fg-muted)' }}>정답률</span>
+            </div>
+            <div className="h-3 overflow-hidden rounded-full" style={{ background: '#e7e5df' }}>
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${Math.min(100, Math.max(0, rate))}%`, background: tone.color }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────
 // 메인 페이지
 // ─────────────────────────────────────────────
@@ -742,6 +913,7 @@ export default function StudentReportPage({
   const weakestDiff = weakestStat(diffStatsSorted);
   const coreDiagnoses = buildCoreDiagnoses(scoreRate, weakestUnit, weakestDiff, guessRate);
   const prescriptions = buildPrescriptions(weakestUnit, weakestDiff, wrongCount, blankCount, guessedCount);
+  const causeStats = buildCauseStats(qaRows);
 
   // 자동 코멘트
   const comment = qaRows.length > 0
@@ -912,36 +1084,39 @@ export default function StudentReportPage({
           {/* ① 종합 결과 카드 */}
           <section className="report-section">
             <SectionTitle>종합 결과</SectionTitle>
-            <div className="grid gap-3 md:grid-cols-4">
-              {primaryCards.map((card) => (
-                <div
-                  key={card.label}
-                  className="rounded-xl p-4"
-                  style={{
-                    background: card.accent ? 'var(--accent)' : 'var(--bg-base)',
-                    border: `1px solid ${card.accent ? 'var(--accent)' : 'var(--border)'}`,
-                  }}
-                >
-                  <p
-                    className="text-xs font-medium mb-2"
-                    style={{ color: card.accent ? 'rgba(255,255,255,0.8)' : 'var(--fg-muted)' }}
+            <div className="grid gap-3 lg:grid-cols-[180px_1fr]">
+              <AccuracyGauge rate={scoreRate} correct={correctCount} total={qaRows.length} />
+              <div className="grid gap-3 md:grid-cols-2">
+                {primaryCards.map((card) => (
+                  <div
+                    key={card.label}
+                    className="report-visual-card rounded-xl p-4"
+                    style={{
+                      background: card.accent ? 'var(--accent)' : 'var(--bg-base)',
+                      border: `1px solid ${card.accent ? 'var(--accent)' : 'var(--border)'}`,
+                    }}
                   >
-                    {card.label}
-                  </p>
-                  <p
-                    className="text-xl font-bold leading-tight"
-                    style={{ color: card.accent ? '#fff' : 'var(--fg-main)' }}
-                  >
-                    {card.value}
-                  </p>
-                  <p
-                    className="mt-1 text-xs"
-                    style={{ color: card.accent ? 'rgba(255,255,255,0.75)' : 'var(--fg-muted)' }}
-                  >
-                    {card.sub}
-                  </p>
-                </div>
-              ))}
+                    <p
+                      className="text-xs font-medium mb-2"
+                      style={{ color: card.accent ? 'rgba(255,255,255,0.8)' : 'var(--fg-muted)' }}
+                    >
+                      {card.label}
+                    </p>
+                    <p
+                      className="text-xl font-bold leading-tight"
+                      style={{ color: card.accent ? '#fff' : 'var(--fg-main)' }}
+                    >
+                      {card.value}
+                    </p>
+                    <p
+                      className="mt-1 text-xs"
+                      style={{ color: card.accent ? 'rgba(255,255,255,0.75)' : 'var(--fg-muted)' }}
+                    >
+                      {card.sub}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
             <div
               className="mt-3 grid gap-2"
@@ -958,6 +1133,11 @@ export default function StudentReportPage({
                 </div>
               ))}
             </div>
+          </section>
+
+          <section className="report-section">
+            <SectionTitle>오답 원인 분포</SectionTitle>
+            <CauseDistribution causes={causeStats} />
           </section>
 
           <section className="report-section">
@@ -984,7 +1164,7 @@ export default function StudentReportPage({
               <EmptyState text="문항에 단원 정보가 입력되지 않았습니다." />
             ) : (
               <div className="space-y-3">
-                <StatBarList stats={majorStats} emptyText="단원 정보가 없습니다." />
+                <AchievementCards stats={majorStats} emptyText="단원 정보가 없습니다." />
                 <AnalysisTable
                   stats={majorStats.map((s) => ({ ...s, name: `▶ ${s.name}` }))}
                 />
@@ -1002,7 +1182,7 @@ export default function StudentReportPage({
               <EmptyState text="문항에 난이도 정보가 입력되지 않았습니다." />
             ) : (
               <div className="space-y-3">
-                <StatBarList stats={diffStatsSorted} emptyText="난이도 정보가 없습니다." />
+                <AchievementCards stats={diffStatsSorted} emptyText="난이도 정보가 없습니다." variant="difficulty" />
                 <AnalysisTable stats={diffStatsSorted} />
               </div>
             )}
