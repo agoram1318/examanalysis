@@ -28,6 +28,7 @@ type QA = {
   answer: string | null;
   score: number;
   difficulty: number | null;
+  question_comment: string | null;
   major_unit_name: string | null;
   middle_unit_name: string | null;
   small_unit_name: string | null;
@@ -50,6 +51,25 @@ function groupStats(items: QA[], keyFn: (qa: QA) => string): GroupStat[] {
     if (qa.ans?.is_correct) s.correct++;
   });
   return [...map.values()];
+}
+
+function wrongQuestionComment(qa: QA): string {
+  const comment = qa.question_comment?.trim();
+  if (comment) {
+    return `${qa.question_number}번 문항은 '${comment}'으로 분류됩니다. 해당 문항에서 오답이 발생했으므로 조건과 풀이 과정을 다시 정리하는 훈련이 필요합니다.`;
+  }
+
+  const unit = qa.small_unit_name || qa.middle_unit_name || qa.major_unit_name || '해당 단원';
+  return `${unit} 단원의 ${difficultyGroup(qa.difficulty)} 문항에서 오답이 발생했습니다. 해당 단원의 개념 적용 훈련이 필요합니다.`;
+}
+
+function guessedQuestionComment(qa: QA): string {
+  const comment = qa.question_comment?.trim();
+  if (comment) {
+    return `${qa.question_number}번 문항은 '${comment}'으로 분류됩니다. 찍음 표시가 있으므로 풀이 근거를 끝까지 세우는 연습이 필요합니다.`;
+  }
+
+  return `${qa.question_number}번 문항은 ${difficultyGroup(qa.difficulty)} 문항입니다. 찍음 표시가 있으므로 풀이 접근을 점검해 주세요.`;
 }
 
 function generateComment(qaRows: QA[], totalScore: number, totalPossible: number): string {
@@ -162,7 +182,7 @@ export default function StudentPrintPage({
       const { data: questionsRaw } = await supabase
         .from('questions')
         .select(`
-          id, question_number, answer, score, difficulty,
+          id, question_number, answer, score, difficulty, question_comment,
           units_major:major_unit_id(name),
           units_middle:middle_unit_id(name),
           units_small:small_unit_id(name)
@@ -176,6 +196,7 @@ export default function StudentPrintPage({
         answer: q.answer,
         score: Number(q.score),
         difficulty: q.difficulty,
+        question_comment: q.question_comment ?? null,
         major_unit_name: pickUnitName(q.units_major),
         middle_unit_name: pickUnitName(q.units_middle),
         small_unit_name: pickUnitName(q.units_small),
@@ -240,6 +261,13 @@ export default function StudentPrintPage({
   );
 
   const comment = qaRows.length > 0 ? generateComment(qaRows, totalScore, totalPossible) : '';
+  const questionCommentPoints = qaRows.filter((qa) =>
+    qa.question_comment?.trim() &&
+    (
+      (qa.ans && !qa.ans.is_correct && !qa.ans.is_blank && qa.ans.selected_answer) ||
+      qa.ans?.is_guessed
+    )
+  );
   const today = formatReportDate();
   const backHref = `/students/${studentId}/tests/${testId}/report`;
 
@@ -356,6 +384,19 @@ export default function StudentPrintPage({
               </ReportTable>
             )}
           </ReportSection>
+
+          {questionCommentPoints.length > 0 && (
+            <ReportSection title="오답 문항 해설 포인트">
+              <ul className="space-y-2">
+                {questionCommentPoints.map((qa) => (
+                  <li key={qa.id} className="text-sm leading-relaxed">
+                    <span className="font-semibold">{qa.question_number}번:</span>{' '}
+                    {qa.ans?.is_guessed ? guessedQuestionComment(qa) : wrongQuestionComment(qa)}
+                  </li>
+                ))}
+              </ul>
+            </ReportSection>
+          )}
         </div>
       </ReportPage>
     </>

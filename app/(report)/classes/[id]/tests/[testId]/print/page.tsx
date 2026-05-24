@@ -22,6 +22,7 @@ type QuestionRow = {
   answer: string | null;
   score: number;
   difficulty: number | null;
+  question_comment: string | null;
   major_unit_name: string | null;
   middle_unit_name: string | null;
   small_unit_name: string | null;
@@ -36,6 +37,11 @@ type AnswerRow = {
   is_correct: boolean;
   earned_score: number;
 };
+
+function featureComment(q: QuestionRow): string | null {
+  const comment = q.question_comment?.trim();
+  return comment || null;
+}
 
 type StudentRow = { id: number; student_name: string; student_code: string | null };
 
@@ -119,7 +125,7 @@ export default function ClassPrintPage({
       const [studentsRes, questionsRes] = await Promise.all([
         supabase.from('students').select('id, student_name, student_code').eq('class_id', classId).order('student_code'),
         supabase.from('questions').select(`
-          id, question_number, answer, score, difficulty,
+          id, question_number, answer, score, difficulty, question_comment,
           units_major:major_unit_id(name),
           units_middle:middle_unit_id(name),
           units_small:small_unit_id(name)
@@ -135,6 +141,7 @@ export default function ClassPrintPage({
         answer: q.answer,
         score: Number(q.score),
         difficulty: q.difficulty,
+        question_comment: q.question_comment ?? null,
         major_unit_name: pickUnitName(q.units_major),
         middle_unit_name: pickUnitName(q.units_middle),
         small_unit_name: pickUnitName(q.units_small),
@@ -294,6 +301,7 @@ export default function ClassPrintPage({
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold" style={{ color: '#dc2626' }}>정답률 {s.correctRate.toFixed(1)}% · 오답 {s.wrongCount}명</p>
                     <p className="text-xs mt-0.5" style={{ color: 'var(--fg-muted)' }}>{s.q.major_unit_name ?? '–'}</p>
+                    {featureComment(s.q) && <p className="text-xs mt-0.5" style={{ color: 'var(--fg-sub)' }}>문항 특징: {featureComment(s.q)}</p>}
                   </div>
                   <span className="report-top5-rank">{i + 1}위</span>
                 </div>
@@ -308,6 +316,7 @@ export default function ClassPrintPage({
                     <span className="report-top5-num" style={{ background: '#fff7ed', color: '#ea580c' }}>{s.q.question_number}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold" style={{ color: '#ea580c' }}>찍음 {s.guessRate.toFixed(1)}% · 정답률 {s.correctRate.toFixed(1)}%</p>
+                      {featureComment(s.q) && <p className="text-xs mt-0.5" style={{ color: 'var(--fg-sub)' }}>문항 특징: {featureComment(s.q)}</p>}
                     </div>
                     <span className="report-top5-rank">{i + 1}위</span>
                   </div>
@@ -342,7 +351,7 @@ export default function ClassPrintPage({
 
           <ReportSection title="문항별 정답률">
             <ReportTable
-              headers={['번호', '정답', '배점', '정답', '오답', '미응답', '정답률', '찍음']}
+              headers={['번호', '정답', '배점', '정답', '오답', '미응답', '정답률', '찍음', '문항 특징']}
               compact
             >
               {qStats.map((s, i) => (
@@ -355,6 +364,7 @@ export default function ClassPrintPage({
                   <ReportTd align="center">{s.blankCount}</ReportTd>
                   <ReportTd align="center">{s.correctRate.toFixed(1)}%</ReportTd>
                   <ReportTd align="center">{s.guessedCount}</ReportTd>
+                  <ReportTd>{featureComment(s.q) ?? '–'}</ReportTd>
                 </ReportTr>
               ))}
             </ReportTable>

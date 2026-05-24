@@ -41,6 +41,7 @@ type QuestionRow = {
   answer: string | null;
   score: number;
   difficulty: number | null;
+  question_comment: string | null;
   major_unit_name: string | null;
   middle_unit_name: string | null;
   small_unit_name: string | null;
@@ -81,6 +82,28 @@ function difficultyGroup(d: number | null): string {
   if (d <= 4) return '기본 적용 (3~4)';
   if (d <= 6) return '중상 난도 (5~6)';
   return '고난도/킬러 (7~8)';
+}
+
+function unitFallback(qa: QuestionRow): string {
+  return qa.small_unit_name || qa.middle_unit_name || qa.major_unit_name || '해당 단원';
+}
+
+function wrongQuestionComment(qa: QuestionRow): string {
+  const comment = qa.question_comment?.trim();
+  if (comment) {
+    return `${qa.question_number}번 문항은 '${comment}'으로 분류됩니다. 해당 문항에서 오답이 발생했으므로 조건과 풀이 과정을 다시 정리하는 훈련이 필요합니다.`;
+  }
+
+  return `${unitFallback(qa)} 단원의 ${difficultyGroup(qa.difficulty)} 문항에서 오답이 발생했습니다. 해당 단원의 개념 적용 훈련이 필요합니다.`;
+}
+
+function guessedQuestionComment(qa: QuestionRow): string {
+  const comment = qa.question_comment?.trim();
+  if (comment) {
+    return `${qa.question_number}번 문항은 '${comment}'으로 분류됩니다. 찍음 표시가 있으므로 풀이 근거를 끝까지 세우는 연습이 필요합니다.`;
+  }
+
+  return `${qa.question_number}번 문항은 ${difficultyGroup(qa.difficulty)} 문항입니다. 찍음 표시가 있으므로 풀이 접근을 점검해 주세요.`;
 }
 
 interface GroupStat { name: string; total: number; correct: number }
@@ -130,6 +153,18 @@ function generateComment(qaRows: QA[], totalScore: number, totalPossible: number
   // 찍어서 맞은 비율
   if (guessedCount > 0 && guessedCorrect / guessedCount > 0.5) {
     parts.push('맞힌 문항도 풀이 과정을 점검할 필요가 있습니다.');
+  }
+
+  const wrongWithComment = qaRows.find((qa) =>
+    qa.ans && !qa.ans.is_correct && !qa.ans.is_blank && qa.ans.selected_answer && qa.question_comment?.trim()
+  );
+  if (wrongWithComment) {
+    parts.push(wrongQuestionComment(wrongWithComment));
+  }
+
+  const guessedWithComment = qaRows.find((qa) => qa.ans?.is_guessed && qa.question_comment?.trim());
+  if (guessedWithComment) {
+    parts.push(guessedQuestionComment(guessedWithComment));
   }
 
   // 후반 미응답
@@ -350,7 +385,7 @@ export default function StudentReportPage({
         .from('questions')
         .select(`
           id, question_number, answer, score,
-          difficulty,
+          difficulty, question_comment,
           units_major:major_unit_id(name),
           units_middle:middle_unit_id(name),
           units_small:small_unit_id(name)
@@ -373,6 +408,7 @@ export default function StudentReportPage({
           answer:           q.answer,
           score:            Number(q.score),
           difficulty:       q.difficulty,
+          question_comment: q.question_comment ?? null,
           major_unit_name:  pickName(q.units_major),
           middle_unit_name: pickName(q.units_middle),
           small_unit_name:  pickName(q.units_small),
@@ -447,6 +483,13 @@ export default function StudentReportPage({
   const comment = qaRows.length > 0
     ? generateComment(qaRows, totalScore, totalPossible)
     : '';
+  const questionCommentPoints = qaRows.filter((qa) =>
+    qa.question_comment?.trim() &&
+    (
+      (qa.ans && !qa.ans.is_correct && !qa.ans.is_blank && qa.ans.selected_answer) ||
+      qa.ans?.is_guessed
+    )
+  );
 
   // ─────────────────────────────────────────────
   // 렌더
@@ -672,6 +715,25 @@ export default function StudentReportPage({
             <QuestionTable qaRows={qaRows} />
           </section>
 
+          {questionCommentPoints.length > 0 && (
+            <section className="report-section">
+              <SectionTitle>오답 문항 해설 포인트</SectionTitle>
+              <div
+                className="rounded-xl px-5 py-4"
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border)' }}
+              >
+                <ul className="space-y-2">
+                  {questionCommentPoints.map((qa) => (
+                    <li key={qa.id} className="text-sm leading-relaxed" style={{ color: 'var(--fg-main)' }}>
+                      <span className="font-semibold">{qa.question_number}번:</span>{' '}
+                      {qa.ans?.is_guessed ? guessedQuestionComment(qa) : wrongQuestionComment(qa)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          )}
+
           {/* ⑥ 자동 코멘트 */}
           {comment && (
             <section className="report-section">
@@ -758,6 +820,7 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
     { label: '중단원',    w: 100 },
     { label: '소단원',    w: 100 },
     { label: '난이도',    w: 80 },
+    { label: '문항 특징', w: 160 },
   ];
 
   return (
@@ -766,7 +829,7 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
       style={{ borderColor: 'var(--border)' }}
     >
       <div className="overflow-x-auto">
-        <table style={{ minWidth: 900, borderCollapse: 'collapse', width: '100%' }}>
+        <table style={{ minWidth: 1060, borderCollapse: 'collapse', width: '100%' }}>
           <thead style={{ background: 'var(--bg-base)' }}>
             <tr>
               {cols.map((col) => (
@@ -896,6 +959,11 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
                   {/* 난이도 */}
                   <td className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: 'var(--fg-sub)' }}>
                     {difficultyLabel(qa.difficulty)}
+                  </td>
+
+                  {/* 문항 특징 */}
+                  <td className="px-3 py-2 text-xs" style={{ color: 'var(--fg-sub)' }}>
+                    {qa.question_comment?.trim() || '–'}
                   </td>
                 </tr>
               );

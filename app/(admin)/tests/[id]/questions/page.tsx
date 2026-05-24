@@ -30,6 +30,7 @@ type QuestionForm = {
   middle_unit_id: number | null;
   small_unit_id: number | null;
   difficulty: number | null;
+  question_comment: string;
 };
 
 // ─────────────────────────────────────────────
@@ -55,6 +56,7 @@ function makeDefaultQuestion(num: number): QuestionForm {
     middle_unit_id: null,
     small_unit_id: null,
     difficulty: null,
+    question_comment: '',
   };
 }
 
@@ -211,6 +213,17 @@ const QuestionRow = React.memo(function QuestionRow({
           ))}
         </select>
       </td>
+
+      {/* 문항 특징 코멘트 */}
+      <td className="px-2 py-2">
+        <textarea
+          className={`${cellInput} resize-none`}
+          style={{ ...cellBorder, width: 180, minHeight: 42 }}
+          placeholder="예: 조건 해석이 핵심인 문항 / 계산 실수 주의 / 중상 난도 변별 문항"
+          value={q.question_comment}
+          onChange={e => onChange(idx, { question_comment: e.target.value })}
+        />
+      </td>
     </tr>
   );
 });
@@ -297,7 +310,7 @@ export default function QuestionsPage({
       const { data: existingQs } = await supabase
         .from('questions')
         .select(
-          'question_number, answer, score, major_unit_id, middle_unit_id, small_unit_id, difficulty'
+          'question_number, answer, score, major_unit_id, middle_unit_id, small_unit_id, difficulty, question_comment'
         )
         .eq('test_id', testId)
         .order('question_number');
@@ -312,6 +325,7 @@ export default function QuestionsPage({
             middle_unit_id:  q.middle_unit_id ?? null,
             small_unit_id:   q.small_unit_id ?? null,
             difficulty:      q.difficulty ?? null,
+            question_comment: q.question_comment ?? '',
           }))
         );
       } else {
@@ -382,6 +396,7 @@ export default function QuestionsPage({
       middle_unit_id:  q.middle_unit_id,
       small_unit_id:   q.small_unit_id,
       difficulty:      q.difficulty,
+      question_comment: q.question_comment.trim() || null,
     }));
 
     const { error: insErr } = await supabase.from('questions').insert(rows);
@@ -523,7 +538,7 @@ export default function QuestionsPage({
         </div>
 
         <div className="overflow-x-auto">
-          <table style={{ minWidth: 780, borderCollapse: 'collapse', width: '100%' }}>
+          <table style={{ minWidth: 980, borderCollapse: 'collapse', width: '100%' }}>
             <thead style={{ background: 'var(--bg-base)' }}>
               <tr>
                 {[
@@ -534,6 +549,7 @@ export default function QuestionsPage({
                   { label: '중단원',    w: 152 },
                   { label: '소단원',    w: 152 },
                   { label: '난이도',    w: 132 },
+                  { label: '문항 특징 코멘트', w: 196 },
                 ].map(col => (
                   <th
                     key={col.label}

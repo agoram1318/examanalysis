@@ -40,6 +40,7 @@ type QuestionRow = {
   answer: string | null;
   score: number;
   difficulty: number | null;
+  question_comment: string | null;
   major_unit_name: string | null;
   middle_unit_name: string | null;
   small_unit_name: string | null;
@@ -79,6 +80,11 @@ function difficultyGroup(d: number | null): string {
   if (d <= 4) return '기본 적용 (3~4)';
   if (d <= 6) return '중상 난도 (5~6)';
   return '고난도/킬러 (7~8)';
+}
+
+function featureComment(q: QuestionRow): string | null {
+  const comment = q.question_comment?.trim();
+  return comment || null;
 }
 
 const DIFF_ORDER = ['기본 확인 (1~2)', '기본 적용 (3~4)', '중상 난도 (5~6)', '고난도/킬러 (7~8)', '미설정'];
@@ -243,7 +249,7 @@ export default function ClassAnalysisPage({
       const [studentsRes, questionsRes] = await Promise.all([
         supabase.from('students').select('id, student_name, student_code').eq('class_id', classId).order('student_code'),
         supabase.from('questions').select(`
-          id, question_number, answer, score, difficulty,
+          id, question_number, answer, score, difficulty, question_comment,
           units_major:major_unit_id(name),
           units_middle:middle_unit_id(name),
           units_small:small_unit_id(name)
@@ -259,6 +265,7 @@ export default function ClassAnalysisPage({
         answer:           q.answer,
         score:            Number(q.score),
         difficulty:       q.difficulty,
+        question_comment: q.question_comment ?? null,
         major_unit_name:  pickName(q.units_major),
         middle_unit_name: pickName(q.units_middle),
         small_unit_name:  pickName(q.units_small),
@@ -390,6 +397,8 @@ export default function ClassAnalysisPage({
 
   // 오답 해석 문구
   function wrongHint(qs: typeof qStats[0]): string {
+    const comment = featureComment(qs.q);
+    if (comment) return `${qs.q.question_number}번은 '${comment}' 문항입니다. 오답이 집중되어 해당 풀이 포인트를 반 전체가 다시 점검할 필요가 있습니다.`;
     if (qs.correctRate < 20) return '고난도 문항으로 변별력이 크게 나타난 문항입니다.';
     if ((qs.q.difficulty ?? 0) >= 6) return '고난도 문항으로 변별력이 크게 나타난 문항입니다.';
     return '정답률이 낮아 해당 단원의 재점검이 필요합니다.';
@@ -397,6 +406,8 @@ export default function ClassAnalysisPage({
 
   // 찍음 해석 문구
   function guessHint(qs: typeof qStats[0]): string {
+    const comment = featureComment(qs.q);
+    if (comment) return `${qs.q.question_number}번은 '${comment}' 문항입니다. 찍음 비율이 높아 풀이 시작점과 판단 근거를 함께 보완해야 합니다.`;
     if ((qs.q.difficulty ?? 0) >= 6) return '점수보다 실질 체감 난도가 높았을 가능성이 있습니다.';
     if (qs.guessRate >= 50) return '학생들이 풀이 방향을 잡기 어려워한 문항입니다.';
     return '시간 부족 또는 접근 불안정성이 나타난 문항입니다.';
@@ -642,10 +653,10 @@ export default function ClassAnalysisPage({
           ) : (
             <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
               <div className="overflow-x-auto">
-                <table style={{ minWidth: 1000, borderCollapse: 'collapse', width: '100%' }}>
+                <table style={{ minWidth: 1160, borderCollapse: 'collapse', width: '100%' }}>
                   <thead>
                     <tr>
-                      {['번호', '정답', '배점', '정답자', '오답자', '미응답', '정답률', '찍음', '찍음률', '대단원', '중단원', '소단원', '난이도'].map((h) => (
+                      {['번호', '정답', '배점', '정답자', '오답자', '미응답', '정답률', '찍음', '찍음률', '대단원', '중단원', '소단원', '난이도', '문항 특징'].map((h) => (
                         <th key={h} style={thStyle}>{h}</th>
                       ))}
                     </tr>
@@ -695,6 +706,9 @@ export default function ClassAnalysisPage({
                           <td style={{ ...tdStyle(i), background: rowBg, fontSize: 12, color: 'var(--fg-sub)', whiteSpace: 'nowrap' }}>
                             {s.q.difficulty !== null ? difficultyGroup(s.q.difficulty).replace(/ \(.*\)/, '') : '–'}
                             {s.q.difficulty !== null ? ` (${s.q.difficulty})` : ''}
+                          </td>
+                          <td style={{ ...tdStyle(i), background: rowBg, fontSize: 12, color: 'var(--fg-sub)', minWidth: 160 }}>
+                            {featureComment(s.q) ?? '–'}
                           </td>
                         </tr>
                       );
@@ -764,6 +778,11 @@ export default function ClassAnalysisPage({
                             난이도: {s.q.difficulty}
                           </div>
                         )}
+                        {featureComment(s.q) && (
+                          <div className="text-xs mb-1.5" style={{ color: 'var(--fg-sub)' }}>
+                            문항 특징: {featureComment(s.q)}
+                          </div>
+                        )}
                         <p className="text-xs" style={{ color: '#7c2d12' }}>{wrongHint(s)}</p>
                       </div>
                       <span
@@ -820,6 +839,11 @@ export default function ClassAnalysisPage({
                         {s.q.difficulty !== null && (
                           <div className="text-xs mb-1.5" style={{ color: 'var(--fg-muted)' }}>
                             난이도: {s.q.difficulty}
+                          </div>
+                        )}
+                        {featureComment(s.q) && (
+                          <div className="text-xs mb-1.5" style={{ color: 'var(--fg-sub)' }}>
+                            문항 특징: {featureComment(s.q)}
                           </div>
                         )}
                         <p className="text-xs" style={{ color: '#78350f' }}>{guessHint(s)}</p>

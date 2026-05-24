@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS questions (
   question_type    TEXT,        -- 현재 초기버전에서는 미사용
   -- 1~8 숫자 등급: 1~2 기본확인 / 3~4 기본적용 / 5~6 중상변별 / 7~8 고난도
   difficulty       SMALLINT CHECK (difficulty BETWEEN 1 AND 8),
+  question_comment TEXT,
   evaluation_point TEXT,        -- 현재 초기버전에서는 미사용
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
 

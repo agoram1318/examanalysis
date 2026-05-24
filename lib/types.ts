@@ -63,6 +63,7 @@ export type Question = {
   score: number;
   question_type: 'multiple' | 'short' | 'essay'; // 객관식 | 단답형 | 서술형
   difficulty: 'easy' | 'medium' | 'hard';
+  question_comment?: string | null;
   created_at: string;
   chapter?: Chapter;
 };

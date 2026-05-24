@@ -41,6 +41,7 @@ type QuestionRow = {
   question_number: number;
   answer: string | null;
   score: number;
+  question_comment: string | null;
 };
 
 type AnswerRow = {
@@ -52,6 +53,11 @@ type AnswerRow = {
   earned_score: number;
   selected_answer: string | null;
 };
+
+function featureComment(q: QuestionRow): string | null {
+  const comment = q.question_comment?.trim();
+  return comment || null;
+}
 
 export default function TestPrintPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: testIdStr } = use(params);
@@ -97,7 +103,7 @@ export default function TestPrintPage({ params }: { params: Promise<{ id: string
 
       const { data: questionsRaw } = await supabase
         .from('questions')
-        .select('id, question_number, answer, score')
+        .select('id, question_number, answer, score, question_comment')
         .eq('test_id', testId)
         .order('question_number');
 
@@ -106,6 +112,7 @@ export default function TestPrintPage({ params }: { params: Promise<{ id: string
         question_number: q.question_number,
         answer: q.answer,
         score: Number(q.score),
+        question_comment: q.question_comment ?? null,
       }));
       setQuestions(qs);
 
@@ -372,7 +379,7 @@ export default function TestPrintPage({ params }: { params: Promise<{ id: string
           </ReportSection>
 
           <ReportSection title="문항별 전체 정답률">
-            <ReportTable headers={['번호', '정답', '배점', '정답', '오답', '미응답', '정답률']} compact>
+            <ReportTable headers={['번호', '정답', '배점', '정답', '오답', '미응답', '정답률', '문항 특징']} compact>
               {qStats.map((s, i) => (
                 <ReportTr key={s.q.id} stripedIndex={i} highlight={s.correctRate < 40 ? 'danger' : undefined}>
                   <ReportTd align="center">{s.q.question_number}</ReportTd>
@@ -382,6 +389,7 @@ export default function TestPrintPage({ params }: { params: Promise<{ id: string
                   <ReportTd align="center">{s.wrongCount}</ReportTd>
                   <ReportTd align="center">{s.blankCount}</ReportTd>
                   <ReportTd align="center">{s.correctRate.toFixed(1)}%</ReportTd>
+                  <ReportTd>{featureComment(s.q) ?? '–'}</ReportTd>
                 </ReportTr>
               ))}
             </ReportTable>

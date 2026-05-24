@@ -54,6 +54,7 @@ type QuestionRow = {
   answer: string | null;
   score: number;
   difficulty: number | null;
+  question_comment: string | null;
   major_unit_name: string | null;
   middle_unit_name: string | null;
   small_unit_name: string | null;
@@ -76,6 +77,31 @@ function pickName(raw: unknown): string | null {
   if (!u) return null;
   if (Array.isArray(u)) return u[0]?.name ?? null;
   return u.name ?? null;
+}
+
+function featureComment(q: QuestionRow): string | null {
+  const comment = q.question_comment?.trim();
+  return comment || null;
+}
+
+function wrongHintWithFeature(
+  correctRate: number,
+  difficulty: number | null,
+  q: QuestionRow,
+): string {
+  const comment = featureComment(q);
+  if (comment) return `${q.question_number}번은 '${comment}' 문항입니다. 오답률이 높아 해당 풀이 포인트를 전체적으로 보완할 필요가 있습니다.`;
+  return wrongInterpretation(correctRate, difficulty);
+}
+
+function guessHintWithFeature(
+  guessRate: number,
+  difficulty: number | null,
+  q: QuestionRow,
+): string {
+  const comment = featureComment(q);
+  if (comment) return `${q.question_number}번은 '${comment}' 문항입니다. 찍음 비율이 높아 풀이 시작점과 판단 근거를 점검해야 합니다.`;
+  return guessInterpretation(guessRate, difficulty);
 }
 
 // ─────────────────────────────────────────────
@@ -160,7 +186,7 @@ export default function TestWideAnalysisPage({ params }: { params: Promise<{ id:
 
       const [questionsRes, classIds] = await Promise.all([
         supabase.from('questions').select(`
-          id, question_number, answer, score, difficulty,
+          id, question_number, answer, score, difficulty, question_comment,
           units_major:major_unit_id(name),
           units_middle:middle_unit_id(name),
           units_small:small_unit_id(name)
@@ -174,6 +200,7 @@ export default function TestWideAnalysisPage({ params }: { params: Promise<{ id:
         answer: q.answer,
         score: Number(q.score),
         difficulty: q.difficulty,
+        question_comment: q.question_comment ?? null,
         major_unit_name: pickName(q.units_major),
         middle_unit_name: pickName(q.units_middle),
         small_unit_name: pickName(q.units_small),
@@ -692,10 +719,10 @@ export default function TestWideAnalysisPage({ params }: { params: Promise<{ id:
             <SectionTitle icon={<BarChart3 size={15} />}>문항별 전체 정답률</SectionTitle>
             <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
               <div className="overflow-x-auto">
-                <table style={{ minWidth: 1000, borderCollapse: 'collapse', width: '100%' }}>
+                <table style={{ minWidth: 1160, borderCollapse: 'collapse', width: '100%' }}>
                   <thead>
                     <tr>
-                      {['번호', '정답', '배점', '정답자', '오답자', '미응답', '정답률', '찍음', '찍음률', '대단원', '중단원', '소단원', '난이도'].map((h) => (
+                      {['번호', '정답', '배점', '정답자', '오답자', '미응답', '정답률', '찍음', '찍음률', '대단원', '중단원', '소단원', '난이도', '문항 특징'].map((h) => (
                         <th key={h} style={thStyle}>{h}</th>
                       ))}
                     </tr>
@@ -725,6 +752,9 @@ export default function TestWideAnalysisPage({ params }: { params: Promise<{ id:
                           <td style={{ ...tdStyle(i), background: rowBg, fontSize: 12, whiteSpace: 'nowrap' }}>
                             {s.q.difficulty !== null ? `${difficultyInterpretation(s.q.difficulty)} (${s.q.difficulty})` : '–'}
                           </td>
+                          <td style={{ ...tdStyle(i), background: rowBg, fontSize: 12, minWidth: 160 }}>
+                            {featureComment(s.q) ?? '–'}
+                          </td>
                         </tr>
                       );
                     })}
@@ -749,7 +779,12 @@ export default function TestWideAnalysisPage({ params }: { params: Promise<{ id:
                           <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--accent-lt)', color: 'var(--accent)' }}>{s.q.major_unit_name}</span>
                         )}
                       </div>
-                      <p className="text-xs" style={{ color: '#7c2d12' }}>{wrongInterpretation(s.correctRate, s.q.difficulty)}</p>
+                      {featureComment(s.q) && (
+                        <p className="text-xs mb-1" style={{ color: 'var(--fg-sub)' }}>
+                          문항 특징: {featureComment(s.q)}
+                        </p>
+                      )}
+                      <p className="text-xs" style={{ color: '#7c2d12' }}>{wrongHintWithFeature(s.correctRate, s.q.difficulty, s.q)}</p>
                     </div>
                     <span className="text-xl font-bold shrink-0" style={{ color: 'var(--fg-muted)' }}>{i + 1}위</span>
                   </div>
@@ -771,7 +806,12 @@ export default function TestWideAnalysisPage({ params }: { params: Promise<{ id:
                           <span className="font-bold text-sm" style={{ color: '#ea580c' }}>찍음 {s.guessRate.toFixed(1)}%</span>
                           <span className="text-xs" style={{ color: 'var(--fg-muted)' }}>{s.guessedCount}명 · 정답률 {s.correctRate.toFixed(1)}%</span>
                         </div>
-                        <p className="text-xs" style={{ color: '#78350f' }}>{guessInterpretation(s.guessRate, s.q.difficulty)}</p>
+                        {featureComment(s.q) && (
+                          <p className="text-xs mb-1" style={{ color: 'var(--fg-sub)' }}>
+                            문항 특징: {featureComment(s.q)}
+                          </p>
+                        )}
+                        <p className="text-xs" style={{ color: '#78350f' }}>{guessHintWithFeature(s.guessRate, s.q.difficulty, s.q)}</p>
                       </div>
                       <span className="text-xl font-bold shrink-0" style={{ color: 'var(--fg-muted)' }}>{i + 1}위</span>
                     </div>
