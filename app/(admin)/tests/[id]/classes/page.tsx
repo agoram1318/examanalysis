@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useCallback, useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, Plus, Users, PenLine, BarChart3,
-  ChevronRight, AlertCircle, Loader2, GraduationCap, TrendingUp,
+  ChevronRight, AlertCircle, Loader2, GraduationCap, TrendingUp, Trash2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { fetchClassIdsForTest } from '@/lib/class-tests';
 import { formatDate } from '@/lib/utils';
 import Button from '@/components/ui/Button';
+import Modal from '@/components/ui/Modal';
 
 // ─────────────────────────────────────────────
 // 타입
@@ -45,53 +46,105 @@ export default function TestClassesPage({
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ClassRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (isNaN(testId)) { setNotFound(true); setLoading(false); return; }
 
-    async function load() {
-      // 테스트 정보
-      const { data: testData, error: testErr } = await supabase
-        .from('tests')
-        .select('id, title, grade, total_questions')
-        .eq('id', testId)
-        .single();
+    const { data: testData, error: testErr } = await supabase
+      .from('tests')
+      .select('id, title, grade, total_questions')
+      .eq('id', testId)
+      .single();
 
-      if (testErr || !testData) { setNotFound(true); setLoading(false); return; }
-      setTest(testData);
+    if (testErr || !testData) { setNotFound(true); setLoading(false); return; }
+    setTest(testData);
 
-      const classIds = await fetchClassIdsForTest(testId);
-      if (classIds.length === 0) {
-        setClasses([]);
-        setLoading(false);
-        return;
-      }
-
-      const { data: classesRaw } = await supabase
-        .from('classes')
-        .select('id, class_name, teacher_name, academy_name, created_at')
-        .in('id', classIds)
-        .order('created_at', { ascending: false });
-
-      const rawList = classesRaw ?? [];
-
-      // 각 반의 학생 수 병렬 조회
-      const withCounts = await Promise.all(
-        rawList.map(async (cls) => {
-          const { count } = await supabase
-            .from('students')
-            .select('*', { count: 'exact', head: true })
-            .eq('class_id', cls.id);
-          return { ...cls, student_count: count ?? 0 };
-        })
-      );
-
-      setClasses(withCounts);
+    const classIds = await fetchClassIdsForTest(testId);
+    if (classIds.length === 0) {
+      setClasses([]);
       setLoading(false);
+      return;
     }
 
-    load();
+    const { data: classesRaw } = await supabase
+      .from('classes')
+      .select('id, class_name, teacher_name, academy_name, created_at')
+      .in('id', classIds)
+      .order('created_at', { ascending: false });
+
+    const rawList = classesRaw ?? [];
+
+    const withCounts = await Promise.all(
+      rawList.map(async (cls) => {
+        const { count } = await supabase
+          .from('students')
+          .select('*', { count: 'exact', head: true })
+          .eq('class_id', cls.id);
+        return { ...cls, student_count: count ?? 0 };
+      })
+    );
+
+    setClasses(withCounts);
+    setLoading(false);
   }, [testId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const closeDeleteModal = () => {
+    if (deleting) return;
+    setDeleteTarget(null);
+    setDeleteError(null);
+  };
+
+  const handleDeleteClass = async () => {
+    if (!deleteTarget) return;
+
+    setDeleting(true);
+    setDeleteError(null);
+    setDeleteSuccess(null);
+
+    try {
+      const { data: studentRows, error: studentError } = await supabase
+        .from('students')
+        .select('id')
+        .eq('class_id', deleteTarget.id);
+      if (studentError) throw studentError;
+
+      const studentIds = (studentRows ?? []).map((student) => student.id);
+      if (studentIds.length > 0) {
+        const { error } = await supabase.from('student_answers').delete().in('student_id', studentIds);
+        if (error) throw error;
+      }
+
+      {
+        const { error } = await supabase.from('class_tests').delete().eq('class_id', deleteTarget.id);
+        if (error) throw error;
+      }
+      {
+        const { error } = await supabase.from('students').delete().eq('class_id', deleteTarget.id);
+        if (error) throw error;
+      }
+      {
+        const { error } = await supabase.from('classes').delete().eq('id', deleteTarget.id);
+        if (error) throw error;
+      }
+
+      setDeleteSuccess(`"${deleteTarget.class_name || '이름 없는 반'}" 반을 삭제했습니다.`);
+      setDeleteTarget(null);
+      await loadData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
+      setDeleteError(`삭제에 실패했습니다. ${message} Supabase RLS를 사용 중이라면 classes, students, student_answers, class_tests 삭제 정책을 확인해 주세요.`);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   // ─────────────────────────────────────────────
   // 렌더
@@ -176,6 +229,15 @@ export default function TestClassesPage({
           </div>
         ))}
       </div>
+
+      {deleteSuccess && (
+        <div
+          className="rounded-xl border px-4 py-3 mb-4 text-sm"
+          style={{ background: '#f0fdf4', borderColor: '#86efac', color: '#15803d' }}
+        >
+          {deleteSuccess}
+        </div>
+      )}
 
       {/* ── 반 목록 ── */}
       {classes.length === 0 ? (
@@ -267,6 +329,17 @@ export default function TestClassesPage({
                           <BarChart3 size={13} /> 전체 분석
                         </Button>
                       </Link>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => {
+                          setDeleteTarget(cls);
+                          setDeleteError(null);
+                          setDeleteSuccess(null);
+                        }}
+                      >
+                        <Trash2 size={13} /> 삭제
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -275,6 +348,36 @@ export default function TestClassesPage({
           </table>
         </div>
       )}
+
+      <Modal open={!!deleteTarget} onClose={closeDeleteModal} title="반 삭제 확인" size="md">
+        <div className="space-y-4">
+          <div
+            className="rounded-lg border px-4 py-3 text-sm leading-relaxed"
+            style={{ background: '#fff7ed', borderColor: '#fed7aa', color: '#7c2d12' }}
+          >
+            이 반을 삭제하면 반에 등록된 학생, 답안, 테스트 부여 정보가 함께 삭제될 수 있습니다. 정말 삭제하시겠습니까?
+          </div>
+          <div className="rounded-lg border px-4 py-3 text-sm" style={{ borderColor: 'var(--border)' }}>
+            <span className="font-semibold">반명:</span> {deleteTarget?.class_name || '이름 없는 반'}
+          </div>
+          {deleteError && (
+            <p
+              className="rounded-lg border px-3 py-2 text-sm leading-relaxed"
+              style={{ background: '#fef2f2', borderColor: '#fca5a5', color: '#dc2626' }}
+            >
+              {deleteError}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={closeDeleteModal} disabled={deleting}>
+              취소
+            </Button>
+            <Button variant="danger" onClick={handleDeleteClass} loading={deleting} disabled={deleting}>
+              삭제
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

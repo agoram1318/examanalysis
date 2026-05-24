@@ -2,11 +2,12 @@
 
 import { useState, useEffect, use, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, UserPlus, Users, ChevronRight, AlertCircle, Loader2, ArrowRight, PenLine, FileBarChart } from 'lucide-react';
+import { ArrowLeft, UserPlus, Users, ChevronRight, AlertCircle, Loader2, ArrowRight, PenLine, FileBarChart, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { formatDate } from '@/lib/utils';
+import Modal from '@/components/ui/Modal';
 
 // ─────────────────────────────────────────────
 // 타입 정의
@@ -51,6 +52,10 @@ export default function StudentsPage({
   const [saving, setSaving]         = useState(false);
   const [saveError, setSaveError]   = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<StudentRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
 
   // ── 학생 목록 새로고침
   const reloadStudents = useCallback(async () => {
@@ -129,6 +134,46 @@ export default function StudentsPage({
     await reloadStudents();
     setSaveSuccess(`${names.length}명이 등록되었습니다.`);
     setSaving(false);
+  };
+
+  const closeDeleteModal = () => {
+    if (deleting) return;
+    setDeleteTarget(null);
+    setDeleteError(null);
+  };
+
+  const handleDeleteStudent = async () => {
+    if (!deleteTarget) return;
+
+    setDeleting(true);
+    setDeleteError(null);
+    setDeleteSuccess(null);
+
+    try {
+      {
+        const { error } = await supabase
+          .from('student_answers')
+          .delete()
+          .eq('student_id', deleteTarget.id);
+        if (error) throw error;
+      }
+      {
+        const { error } = await supabase
+          .from('students')
+          .delete()
+          .eq('id', deleteTarget.id);
+        if (error) throw error;
+      }
+
+      setDeleteSuccess(`"${deleteTarget.student_name}" 학생을 삭제했습니다.`);
+      setDeleteTarget(null);
+      await reloadStudents();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
+      setDeleteError(`삭제에 실패했습니다. ${message} Supabase RLS를 사용 중이라면 students, student_answers 삭제 정책을 확인해 주세요.`);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // ── 로딩
@@ -261,6 +306,14 @@ export default function StudentsPage({
                 ✓ {saveSuccess}
               </div>
             )}
+            {deleteSuccess && (
+              <div
+                className="px-3 py-2.5 rounded-lg border text-sm"
+                style={{ background: '#f0fdf4', borderColor: '#86efac', color: '#15803d' }}
+              >
+                {deleteSuccess}
+              </div>
+            )}
 
             <div className="flex justify-end">
               <Button
@@ -359,6 +412,17 @@ export default function StudentsPage({
                               <FileBarChart size={13} /> 리포트
                             </Button>
                           </Link>
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={() => {
+                              setDeleteTarget(s);
+                              setDeleteError(null);
+                              setDeleteSuccess(null);
+                            }}
+                          >
+                            <Trash2 size={13} /> 삭제
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -393,6 +457,36 @@ export default function StudentsPage({
           </Link>
         </div>
       </div>
+
+      <Modal open={!!deleteTarget} onClose={closeDeleteModal} title="학생 삭제 확인" size="md">
+        <div className="space-y-4">
+          <div
+            className="rounded-lg border px-4 py-3 text-sm leading-relaxed"
+            style={{ background: '#fff7ed', borderColor: '#fed7aa', color: '#7c2d12' }}
+          >
+            이 학생을 삭제하면 해당 학생의 답안과 분석 데이터가 함께 삭제됩니다. 정말 삭제하시겠습니까?
+          </div>
+          <div className="rounded-lg border px-4 py-3 text-sm" style={{ borderColor: 'var(--border)' }}>
+            <span className="font-semibold">학생명:</span> {deleteTarget?.student_name}
+          </div>
+          {deleteError && (
+            <p
+              className="rounded-lg border px-3 py-2 text-sm leading-relaxed"
+              style={{ background: '#fef2f2', borderColor: '#fca5a5', color: '#dc2626' }}
+            >
+              {deleteError}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={closeDeleteModal} disabled={deleting}>
+              취소
+            </Button>
+            <Button variant="danger" onClick={handleDeleteStudent} loading={deleting} disabled={deleting}>
+              삭제
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

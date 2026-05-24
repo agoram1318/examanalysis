@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   GraduationCap, Plus, Users, PenLine, BarChart3,
-  Loader2, ClipboardList, Link2,
+  Loader2, ClipboardList, Link2, Trash2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/utils';
 import Button from '@/components/ui/Button';
+import Modal from '@/components/ui/Modal';
 
 type ClassRow = {
   id: number;
@@ -23,55 +24,110 @@ type ClassRow = {
 export default function ClassesPage() {
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<ClassRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
+
+  const loadClasses = useCallback(async () => {
+    const { data: rawList } = await supabase
+      .from('classes')
+      .select('id, class_name, teacher_name, academy_name, created_at, test_id')
+      .order('created_at', { ascending: false });
+
+    const withCounts: ClassRow[] = await Promise.all(
+      (rawList ?? []).map(async (cls) => {
+        const [studentRes, mapRes] = await Promise.all([
+          supabase
+            .from('students')
+            .select('*', { count: 'exact', head: true })
+            .eq('class_id', cls.id),
+          supabase
+            .from('class_tests')
+            .select('*', { count: 'exact', head: true })
+            .eq('class_id', cls.id),
+        ]);
+
+        let testCount = mapRes.count ?? 0;
+        if (cls.test_id) {
+          const { data: legacyMap } = await supabase
+            .from('class_tests')
+            .select('id')
+            .eq('class_id', cls.id)
+            .eq('test_id', cls.test_id)
+            .maybeSingle();
+          if (!legacyMap) testCount += 1;
+        }
+
+        return {
+          id: cls.id,
+          class_name: cls.class_name,
+          teacher_name: cls.teacher_name,
+          academy_name: cls.academy_name,
+          created_at: cls.created_at,
+          student_count: studentRes.count ?? 0,
+          test_count: testCount,
+        };
+      })
+    );
+
+    setClasses(withCounts);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    async function load() {
-      const { data: rawList } = await supabase
-        .from('classes')
-        .select('id, class_name, teacher_name, academy_name, created_at, test_id')
-        .order('created_at', { ascending: false });
+    loadClasses();
+  }, [loadClasses]);
 
-      const withCounts: ClassRow[] = await Promise.all(
-        (rawList ?? []).map(async (cls) => {
-          const [studentRes, mapRes] = await Promise.all([
-            supabase
-              .from('students')
-              .select('*', { count: 'exact', head: true })
-              .eq('class_id', cls.id),
-            supabase
-              .from('class_tests')
-              .select('*', { count: 'exact', head: true })
-              .eq('class_id', cls.id),
-          ]);
+  const closeDeleteModal = () => {
+    if (deleting) return;
+    setDeleteTarget(null);
+    setDeleteError(null);
+  };
 
-          let testCount = mapRes.count ?? 0;
-          if (cls.test_id) {
-            const { data: legacyMap } = await supabase
-              .from('class_tests')
-              .select('id')
-              .eq('class_id', cls.id)
-              .eq('test_id', cls.test_id)
-              .maybeSingle();
-            if (!legacyMap) testCount += 1;
-          }
+  const handleDeleteClass = async () => {
+    if (!deleteTarget) return;
 
-          return {
-            id: cls.id,
-            class_name: cls.class_name,
-            teacher_name: cls.teacher_name,
-            academy_name: cls.academy_name,
-            created_at: cls.created_at,
-            student_count: studentRes.count ?? 0,
-            test_count: testCount,
-          };
-        })
-      );
+    setDeleting(true);
+    setDeleteError(null);
+    setDeleteSuccess(null);
 
-      setClasses(withCounts);
-      setLoading(false);
+    try {
+      const { data: studentRows, error: studentError } = await supabase
+        .from('students')
+        .select('id')
+        .eq('class_id', deleteTarget.id);
+      if (studentError) throw studentError;
+
+      const studentIds = (studentRows ?? []).map((student) => student.id);
+      if (studentIds.length > 0) {
+        const { error } = await supabase.from('student_answers').delete().in('student_id', studentIds);
+        if (error) throw error;
+      }
+
+      {
+        const { error } = await supabase.from('class_tests').delete().eq('class_id', deleteTarget.id);
+        if (error) throw error;
+      }
+      {
+        const { error } = await supabase.from('students').delete().eq('class_id', deleteTarget.id);
+        if (error) throw error;
+      }
+      {
+        const { error } = await supabase.from('classes').delete().eq('id', deleteTarget.id);
+        if (error) throw error;
+      }
+
+      setDeleteSuccess(`"${deleteTarget.class_name || '이름 없는 반'}" 반을 삭제했습니다.`);
+      setDeleteTarget(null);
+      await loadClasses();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
+      setDeleteError(`삭제에 실패했습니다. ${message} Supabase RLS를 사용 중이라면 classes, students, student_answers, class_tests 삭제 정책을 확인해 주세요.`);
+    } finally {
+      setDeleting(false);
     }
-    load();
-  }, []);
+  };
 
   return (
     <div className="space-y-5">
@@ -108,6 +164,15 @@ export default function ClassesPage() {
           </span>
         ))}
       </div>
+
+      {deleteSuccess && (
+        <div
+          className="rounded-xl border px-4 py-3 text-sm"
+          style={{ background: '#f0fdf4', borderColor: '#86efac', color: '#15803d' }}
+        >
+          {deleteSuccess}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-24">
@@ -209,6 +274,17 @@ export default function ClassesPage() {
                             <BarChart3 size={13} /> 분석 보기
                           </Button>
                         </Link>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => {
+                            setDeleteTarget(cls);
+                            setDeleteError(null);
+                            setDeleteSuccess(null);
+                          }}
+                        >
+                          <Trash2 size={13} /> 삭제
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -225,6 +301,36 @@ export default function ClassesPage() {
           테스트별 반 목록은 테스트 관리 → 반 목록에서도 확인할 수 있습니다.
         </p>
       )}
+
+      <Modal open={!!deleteTarget} onClose={closeDeleteModal} title="반 삭제 확인" size="md">
+        <div className="space-y-4">
+          <div
+            className="rounded-lg border px-4 py-3 text-sm leading-relaxed"
+            style={{ background: '#fff7ed', borderColor: '#fed7aa', color: '#7c2d12' }}
+          >
+            이 반을 삭제하면 반에 등록된 학생, 답안, 테스트 부여 정보가 함께 삭제될 수 있습니다. 정말 삭제하시겠습니까?
+          </div>
+          <div className="rounded-lg border px-4 py-3 text-sm" style={{ borderColor: 'var(--border)' }}>
+            <span className="font-semibold">반명:</span> {deleteTarget?.class_name || '이름 없는 반'}
+          </div>
+          {deleteError && (
+            <p
+              className="rounded-lg border px-3 py-2 text-sm leading-relaxed"
+              style={{ background: '#fef2f2', borderColor: '#fca5a5', color: '#dc2626' }}
+            >
+              {deleteError}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={closeDeleteModal} disabled={deleting}>
+              취소
+            </Button>
+            <Button variant="danger" onClick={handleDeleteClass} loading={deleting} disabled={deleting}>
+              삭제
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

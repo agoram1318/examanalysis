@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { Plus, ClipboardList, Edit2, Users, Loader2, ChevronRight, BarChart3 } from 'lucide-react';
+import { Plus, ClipboardList, Edit2, Users, Loader2, ChevronRight, BarChart3, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/utils';
+import Modal from '@/components/ui/Modal';
 
 type TestRow = {
   id: number;
@@ -21,17 +22,73 @@ type TestRow = {
 export default function TestsPage() {
   const [tests, setTests] = useState<TestRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<TestRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
-    supabase
+  const loadTests = useCallback(async () => {
+    const { data } = await supabase
       .from('tests')
       .select('id, title, grade, total_questions, created_at, subjects(name)')
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setTests((data ?? []) as unknown as TestRow[]);
-        setLoading(false);
-      });
+      .order('created_at', { ascending: false });
+    setTests((data ?? []) as unknown as TestRow[]);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    loadTests();
+  }, [loadTests]);
+
+  const closeDeleteModal = () => {
+    if (deleting) return;
+    setDeleteTarget(null);
+    setDeleteError(null);
+  };
+
+  const handleDeleteTest = async () => {
+    if (!deleteTarget) return;
+
+    setDeleting(true);
+    setDeleteError(null);
+    setDeleteSuccess(null);
+
+    try {
+      const { data: questionRows, error: questionError } = await supabase
+        .from('questions')
+        .select('id')
+        .eq('test_id', deleteTarget.id);
+      if (questionError) throw questionError;
+
+      const questionIds = (questionRows ?? []).map((q) => q.id);
+      if (questionIds.length > 0) {
+        const { error } = await supabase.from('student_answers').delete().in('question_id', questionIds);
+        if (error) throw error;
+      }
+
+      {
+        const { error } = await supabase.from('class_tests').delete().eq('test_id', deleteTarget.id);
+        if (error) throw error;
+      }
+      {
+        const { error } = await supabase.from('questions').delete().eq('test_id', deleteTarget.id);
+        if (error) throw error;
+      }
+      {
+        const { error } = await supabase.from('tests').delete().eq('id', deleteTarget.id);
+        if (error) throw error;
+      }
+
+      setDeleteSuccess(`"${deleteTarget.title}" 테스트를 삭제했습니다.`);
+      setDeleteTarget(null);
+      await loadTests();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
+      setDeleteError(`삭제에 실패했습니다. ${message} Supabase RLS를 사용 중이라면 tests, questions, class_tests, student_answers 삭제 정책을 확인해 주세요.`);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -71,6 +128,15 @@ export default function TestsPage() {
             </span>
           ))}
           <span className="ml-1">버튼을 눌러 각 테스트를 관리하세요.</span>
+        </div>
+      )}
+
+      {deleteSuccess && (
+        <div
+          className="rounded-xl border px-4 py-3 text-sm"
+          style={{ background: '#f0fdf4', borderColor: '#86efac', color: '#15803d' }}
+        >
+          {deleteSuccess}
         </div>
       )}
 
@@ -159,6 +225,17 @@ export default function TestsPage() {
                         <Users size={14} /> 반 생성
                       </Button>
                     </Link>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => {
+                        setDeleteTarget(test);
+                        setDeleteError(null);
+                        setDeleteSuccess(null);
+                      }}
+                    >
+                      <Trash2 size={14} /> 삭제
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -166,6 +243,37 @@ export default function TestsPage() {
           })}
         </div>
       )}
+
+      <Modal open={!!deleteTarget} onClose={closeDeleteModal} title="테스트 삭제 확인" size="md">
+        <div className="space-y-4">
+          <div
+            className="rounded-lg border px-4 py-3 text-sm leading-relaxed"
+            style={{ background: '#fff7ed', borderColor: '#fed7aa', color: '#7c2d12' }}
+          >
+            이 테스트를 삭제하면 연결된 문항, 반 부여 정보, 해당 테스트의 답안/분석 데이터가 함께 삭제될 수 있습니다.
+            정말 삭제하시겠습니까?
+          </div>
+          <div className="rounded-lg border px-4 py-3 text-sm" style={{ borderColor: 'var(--border)' }}>
+            <span className="font-semibold">테스트명:</span> {deleteTarget?.title}
+          </div>
+          {deleteError && (
+            <p
+              className="rounded-lg border px-3 py-2 text-sm leading-relaxed"
+              style={{ background: '#fef2f2', borderColor: '#fca5a5', color: '#dc2626' }}
+            >
+              {deleteError}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={closeDeleteModal} disabled={deleting}>
+              취소
+            </Button>
+            <Button variant="danger" onClick={handleDeleteTest} loading={deleting} disabled={deleting}>
+              삭제
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
