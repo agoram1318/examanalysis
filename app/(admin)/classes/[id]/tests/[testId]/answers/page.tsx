@@ -4,7 +4,7 @@ import React, { useState, useEffect, use, useCallback } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, Save, AlertCircle, Loader2, ChevronRight,
-  CheckCircle2, XCircle, MinusCircle, BarChart3, FileBarChart,
+  BarChart3, FileBarChart,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { fetchTestsForClass } from '@/lib/class-tests';
@@ -31,6 +31,7 @@ type TestRow = {
 type QuestionRow = {
   id: number;
   question_number: number;
+  question_format: 'objective' | 'subjective';
   answer: string | null;
   score: number;
 };
@@ -43,6 +44,7 @@ type StudentRow = {
 
 type AnswerForm = {
   selected_answer: string;
+  is_correct: boolean;
   is_guessed: boolean;
   is_blank: boolean;
 };
@@ -55,16 +57,18 @@ type AnswerMap = Record<number, AnswerForm>; // key: question.id
 const CHOICES = ['1', '2', '3', '4', '5'] as const;
 
 function defaultForm(): AnswerForm {
-  return { selected_answer: '', is_guessed: false, is_blank: false };
+  return { selected_answer: '', is_correct: false, is_guessed: false, is_blank: false };
 }
 
-function computeResult(form: AnswerForm, correctAnswer: string | null, score: number) {
+function computeResult(form: AnswerForm, score: number) {
   if (form.is_blank || !form.selected_answer.trim()) {
     return { is_correct: false, earned_score: 0 };
   }
-  const correct =
-    form.selected_answer.trim() === (correctAnswer ?? '').trim();
-  return { is_correct: correct, earned_score: correct ? score : 0 };
+  return { is_correct: form.is_correct, earned_score: form.is_correct ? score : 0 };
+}
+
+function questionFormatLabel(format: QuestionRow['question_format']): string {
+  return format === 'subjective' ? '주관식' : '객관식';
 }
 
 type StudentStatus = 'none' | 'partial' | 'complete';
@@ -186,11 +190,14 @@ export default function AnswersPage({
       // 3. 문항
       const { data: questionsData } = await supabase
         .from('questions')
-        .select('id, question_number, answer, score')
+        .select('id, question_number, question_format, answer, score')
         .eq('test_id', testId)
         .order('question_number');
 
-      const qs = questionsData ?? [];
+      const qs = (questionsData ?? []).map((q) => ({
+        ...q,
+        question_format: q.question_format === 'subjective' ? 'subjective' : 'objective',
+      })) as QuestionRow[];
       setQuestions(qs);
 
       // 4. 학생별 답안 수 로드
@@ -218,7 +225,7 @@ export default function AnswersPage({
 
     supabase
       .from('student_answers')
-      .select('question_id, selected_answer, is_guessed, is_blank')
+      .select('question_id, selected_answer, is_correct, is_guessed, is_blank')
       .eq('student_id', selectedStudentId)
       .in('question_id', questionIds)
       .then(({ data }) => {
@@ -227,6 +234,7 @@ export default function AnswersPage({
         (data ?? []).forEach((row) => {
           map[row.question_id] = {
             selected_answer: row.selected_answer ?? '',
+            is_correct: row.is_correct ?? false,
             is_guessed: row.is_guessed ?? false,
             is_blank: row.is_blank ?? false,
           };
@@ -242,7 +250,10 @@ export default function AnswersPage({
       setAnswerMap((prev) => {
         const cur = prev[questionId] ?? defaultForm();
         const updated = { ...cur, ...patch };
-        if (patch.is_blank === true) updated.selected_answer = '';
+        if (patch.is_blank === true) {
+          updated.selected_answer = '';
+          updated.is_correct = false;
+        }
         if (patch.selected_answer !== undefined && patch.selected_answer !== '') {
           updated.is_blank = false;
         }
@@ -275,7 +286,7 @@ export default function AnswersPage({
 
     const rows = questions.map((q) => {
       const form = answerMap[q.id] ?? defaultForm();
-      const { is_correct, earned_score } = computeResult(form, q.answer, q.score);
+      const { is_correct, earned_score } = computeResult(form, q.score);
       return {
         student_id:      selectedStudentId,
         question_id:     q.id,
@@ -326,7 +337,7 @@ export default function AnswersPage({
       if (!form.selected_answer.trim()) return;
       answered++;
       if (form.is_guessed) guessed++;
-      const { is_correct, earned_score } = computeResult(form, q.answer, q.score);
+      const { is_correct, earned_score } = computeResult(form, q.score);
       if (is_correct) { correct++; score += earned_score; }
       else wrong++;
     });
@@ -623,12 +634,13 @@ export default function AnswersPage({
                         <tr>
                           {[
                             { label: '번호',      w: 56  },
+                            { label: '문항 형식', w: 84  },
                             { label: '정답',      w: 64  },
                             { label: '배점',      w: 56  },
                             { label: '학생 답안', w: 240 },
+                            { label: '채점 결과', w: 112 },
                             { label: '찍음',      w: 56  },
                             { label: '미응답',    w: 64  },
-                            { label: '결과',      w: 60  },
                             { label: '획득 점수', w: 80  },
                           ].map((col) => (
                             <th
@@ -649,9 +661,7 @@ export default function AnswersPage({
                       <tbody>
                         {questions.map((q, i) => {
                           const form = answerMap[q.id] ?? defaultForm();
-                          const { is_correct, earned_score } = computeResult(
-                            form, q.answer, q.score
-                          );
+                          const { is_correct, earned_score } = computeResult(form, q.score);
                           const hasAnswer =
                             !form.is_blank && form.selected_answer.trim() !== '';
                           const rowBg = i % 2 === 0 ? '#ffffff' : '#fafaf9';
@@ -677,6 +687,19 @@ export default function AnswersPage({
                                 </span>
                               </td>
 
+                              {/* 문항 형식 */}
+                              <td className="px-3 py-2 text-center">
+                                <span
+                                  className="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold"
+                                  style={{
+                                    background: q.question_format === 'subjective' ? '#eef2ff' : 'var(--accent-lt)',
+                                    color: q.question_format === 'subjective' ? '#4338ca' : 'var(--accent)',
+                                  }}
+                                >
+                                  {questionFormatLabel(q.question_format)}
+                                </span>
+                              </td>
+
                               {/* 정답 */}
                               <td className="px-3 py-2 text-center">
                                 <span
@@ -695,41 +718,78 @@ export default function AnswersPage({
                                 {q.score}점
                               </td>
 
-                              {/* 학생 답안: 1~5 버튼 */}
+                              {/* 학생 답안 */}
                               <td className="px-3 py-2">
-                                <div className="flex items-center gap-1.5">
-                                  {CHOICES.map((n) => {
-                                    const isSel = form.selected_answer === n;
-                                    const disabled = form.is_blank;
+                                {q.question_format === 'objective' ? (
+                                  <div className="flex items-center gap-1.5">
+                                    {CHOICES.map((n) => {
+                                      const isSel = form.selected_answer === n;
+                                      const disabled = form.is_blank;
+                                      const nextAnswer = form.selected_answer === n ? '' : n;
+                                      return (
+                                        <button
+                                          key={n}
+                                          onClick={() =>
+                                            updateAnswer(q.id, {
+                                              selected_answer: nextAnswer,
+                                              is_correct: nextAnswer !== '' && nextAnswer.trim() === (q.answer ?? '').trim(),
+                                              is_blank: false,
+                                            })
+                                          }
+                                          disabled={disabled}
+                                          className="w-8 h-8 rounded-full text-sm font-bold border-2 transition-all"
+                                          style={{
+                                            background: isSel ? 'var(--accent)' : '#fff',
+                                            borderColor: isSel ? 'var(--accent)' : 'var(--border)',
+                                            color: isSel ? '#fff' : disabled ? 'var(--fg-muted)' : 'var(--fg-sub)',
+                                            opacity: disabled ? 0.4 : 1,
+                                            cursor: disabled ? 'not-allowed' : 'pointer',
+                                          }}
+                                        >
+                                          {n}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <input
+                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                                    style={{ borderColor: 'var(--border)' }}
+                                    placeholder="학생 답안 입력"
+                                    value={form.selected_answer}
+                                    disabled={form.is_blank}
+                                    onChange={(e) =>
+                                      updateAnswer(q.id, {
+                                        selected_answer: e.target.value,
+                                        is_blank: false,
+                                      })
+                                    }
+                                  />
+                                )}
+                              </td>
+
+                              {/* 채점 결과 */}
+                              <td className="px-3 py-2">
+                                <div className="inline-flex overflow-hidden rounded-lg border" style={{ borderColor: 'var(--border)' }}>
+                                  {[
+                                    { label: 'O', value: true, color: '#16a34a' },
+                                    { label: 'X', value: false, color: '#dc2626' },
+                                  ].map((item) => {
+                                    const selected = form.is_correct === item.value && !form.is_blank;
                                     return (
                                       <button
-                                        key={n}
-                                        onClick={() =>
-                                          updateAnswer(q.id, {
-                                            selected_answer:
-                                              form.selected_answer === n ? '' : n,
-                                            is_blank: false,
-                                          })
-                                        }
-                                        disabled={disabled}
-                                        className="w-8 h-8 rounded-full text-sm font-bold border-2 transition-all"
+                                        key={item.label}
+                                        type="button"
+                                        disabled={form.is_blank}
+                                        onClick={() => updateAnswer(q.id, { is_correct: item.value, is_blank: false })}
+                                        className="px-3 py-1.5 text-xs font-bold transition-all"
                                         style={{
-                                          background: isSel
-                                            ? 'var(--accent)'
-                                            : '#fff',
-                                          borderColor: isSel
-                                            ? 'var(--accent)'
-                                            : 'var(--border)',
-                                          color: isSel
-                                            ? '#fff'
-                                            : disabled
-                                            ? 'var(--fg-muted)'
-                                            : 'var(--fg-sub)',
-                                          opacity: disabled ? 0.4 : 1,
-                                          cursor: disabled ? 'not-allowed' : 'pointer',
+                                          background: selected ? item.color : '#fff',
+                                          color: selected ? '#fff' : form.is_blank ? 'var(--fg-muted)' : item.color,
+                                          opacity: form.is_blank ? 0.45 : 1,
                                         }}
                                       >
-                                        {n}
+                                        {item.label}
                                       </button>
                                     );
                                   })}
@@ -756,42 +816,12 @@ export default function AnswersPage({
                                   onChange={(e) =>
                                     updateAnswer(q.id, {
                                       is_blank: e.target.checked,
-                                      selected_answer: e.target.checked
-                                        ? ''
-                                        : form.selected_answer,
+                                      selected_answer: e.target.checked ? '' : form.selected_answer,
+                                      is_correct: e.target.checked ? false : form.is_correct,
                                     })
                                   }
                                   className="w-4 h-4 cursor-pointer accent-orange-500"
                                 />
-                              </td>
-
-                              {/* 결과 */}
-                              <td className="px-3 py-2 text-center">
-                                {!hasAnswer && !form.is_blank ? (
-                                  <MinusCircle
-                                    size={16}
-                                    className="mx-auto"
-                                    style={{ color: 'var(--fg-muted)' }}
-                                  />
-                                ) : form.is_blank ? (
-                                  <MinusCircle
-                                    size={16}
-                                    className="mx-auto"
-                                    style={{ color: '#94a3b8' }}
-                                  />
-                                ) : is_correct ? (
-                                  <CheckCircle2
-                                    size={16}
-                                    className="mx-auto"
-                                    style={{ color: '#16a34a' }}
-                                  />
-                                ) : (
-                                  <XCircle
-                                    size={16}
-                                    className="mx-auto"
-                                    style={{ color: '#dc2626' }}
-                                  />
-                                )}
                               </td>
 
                               {/* 획득 점수 */}

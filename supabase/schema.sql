@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS questions (
   question_number INT         NOT NULL,
   answer          TEXT,
   score           NUMERIC(5,2) NOT NULL DEFAULT 0,
+  question_format TEXT        NOT NULL DEFAULT 'objective'
+    CHECK (question_format IN ('objective', 'subjective')),
   subject_id      BIGINT      REFERENCES subjects(id)     ON DELETE SET NULL,
   major_unit_id   BIGINT      REFERENCES units_major(id)  ON DELETE SET NULL,
   middle_unit_id  BIGINT      REFERENCES units_middle(id) ON DELETE SET NULL,

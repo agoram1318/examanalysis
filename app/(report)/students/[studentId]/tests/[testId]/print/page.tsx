@@ -23,6 +23,7 @@ import Button from '@/components/ui/Button';
 type QA = {
   id: number;
   question_number: number;
+  question_format: 'objective' | 'subjective';
   answer: string | null;
   score: number;
   difficulty: number | null;
@@ -99,6 +100,10 @@ function difficultySummary(avg: number | null): string {
   if (avg <= 4) return '기본 적용 중심';
   if (avg <= 6) return '중상 난도 중심';
   return '고난도/킬러 중심';
+}
+
+function questionFormatLabel(format: QA['question_format']): string {
+  return format === 'subjective' ? '주관식' : '객관식';
 }
 
 function curriculumCompare(a: QA, b: QA): number {
@@ -746,7 +751,7 @@ export default function StudentPrintPage({
       const { data: questionsRaw } = await supabase
         .from('questions')
         .select(`
-          id, question_number, answer, score, difficulty, question_comment,
+          id, question_number, question_format, answer, score, difficulty, question_comment,
           subjects:subject_id(order_index),
           units_major:major_unit_id(name, order_index),
           units_middle:middle_unit_id(name, order_index),
@@ -761,9 +766,10 @@ export default function StudentPrintPage({
         return typeof value === 'number' ? value : 9999;
       }
 
-      const questions = (questionsRaw ?? []).map((q) => ({
+      const questions: Omit<QA, 'ans'>[] = (questionsRaw ?? []).map((q) => ({
         id: q.id,
         question_number: q.question_number,
+        question_format: q.question_format === 'subjective' ? 'subjective' : 'objective',
         answer: q.answer,
         score: Number(q.score),
         difficulty: q.difficulty,
@@ -988,7 +994,7 @@ export default function StudentPrintPage({
               <p className="report-empty">문항이 없습니다.</p>
             ) : (
               <ReportTable
-                headers={['번호', '정답', '학생 답', '결과', '점수', '찍음', '미응답', '난이도']}
+                headers={['번호', '형식', '정답', '학생 답', '결과', '점수', '배점', '찍음', '미응답', '대단원', '중단원', '소단원', '난이도', '학습 포인트']}
                 compact
               >
                 {qaRows.map((qa, i) => {
@@ -1004,6 +1010,7 @@ export default function StudentPrintPage({
                   return (
                     <ReportTr key={qa.id} stripedIndex={i}>
                       <ReportTd align="center">{qa.question_number}</ReportTd>
+                      <ReportTd align="center">{questionFormatLabel(qa.question_format)}</ReportTd>
                       <ReportTd align="center">{qa.answer ?? '–'}</ReportTd>
                       <ReportTd align="center">
                         {ans?.is_blank ? '미응답' : ans?.selected_answer ?? '–'}
@@ -1012,9 +1019,14 @@ export default function StudentPrintPage({
                         {result}
                       </ReportTd>
                       <ReportTd align="center">{ans ? `${ans.earned_score}` : '–'}</ReportTd>
+                      <ReportTd align="center">{qa.score}</ReportTd>
                       <ReportTd align="center">{ans?.is_guessed ? 'O' : '–'}</ReportTd>
                       <ReportTd align="center">{ans?.is_blank ? 'O' : '–'}</ReportTd>
+                      <ReportTd align="center">{qa.major_unit_name ?? '–'}</ReportTd>
+                      <ReportTd align="center">{qa.middle_unit_name ?? '–'}</ReportTd>
+                      <ReportTd align="center">{qa.small_unit_name ?? '–'}</ReportTd>
                       <ReportTd align="center">{qa.difficulty ?? '–'}</ReportTd>
+                      <ReportTd>{qa.question_comment ?? '–'}</ReportTd>
                     </ReportTr>
                   );
                 })}

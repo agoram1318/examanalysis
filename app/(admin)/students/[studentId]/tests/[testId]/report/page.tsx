@@ -39,6 +39,7 @@ type TestRow = {
 type QuestionRow = {
   id: number;
   question_number: number;
+  question_format: 'objective' | 'subjective';
   answer: string | null;
   score: number;
   difficulty: number | null;
@@ -100,6 +101,10 @@ function difficultyGroup(d: number | null): string {
   if (d <= 4) return '기본 적용 (3~4)';
   if (d <= 6) return '중상 난도 (5~6)';
   return '고난도/킬러 (7~8)';
+}
+
+function questionFormatLabel(format: QuestionRow['question_format']): string {
+  return format === 'subjective' ? '주관식' : '객관식';
 }
 
 function difficultySummary(avg: number | null): string {
@@ -972,7 +977,7 @@ export default function StudentReportPage({
       const { data: questionsRaw } = await supabase
         .from('questions')
         .select(`
-          id, question_number, answer, score,
+          id, question_number, question_format, answer, score,
           difficulty, question_comment,
           subjects:subject_id(order_index),
           units_major:major_unit_id(name, order_index),
@@ -999,6 +1004,7 @@ export default function StudentReportPage({
         return {
           id:               q.id,
           question_number:  q.question_number,
+          question_format:  q.question_format === 'subjective' ? 'subjective' : 'objective',
           answer:           q.answer,
           score:            Number(q.score),
           difficulty:       q.difficulty,
@@ -1536,10 +1542,12 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
 
   const cols = [
     { label: '번호',      w: 52 },
+    { label: '문항 형식', w: 72 },
     { label: '정답',      w: 60 },
     { label: '학생 답',   w: 72 },
     { label: '결과',      w: 56 },
     { label: '획득 점수', w: 72 },
+    { label: '배점',      w: 56 },
     { label: '찍음',      w: 52 },
     { label: '미응답',    w: 60 },
     { label: '대단원',    w: 100 },
@@ -1555,7 +1563,7 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
       style={{ borderColor: 'var(--border)' }}
     >
       <div className="overflow-x-auto">
-        <table style={{ minWidth: 1060, borderCollapse: 'collapse', width: '100%' }}>
+        <table style={{ minWidth: 1140, borderCollapse: 'collapse', width: '100%' }}>
           <thead style={{ background: 'var(--bg-base)' }}>
             <tr>
               {cols.map((col) => (
@@ -1592,6 +1600,19 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
                       style={{ background: 'var(--accent-lt)', color: 'var(--accent)' }}
                     >
                       {qa.question_number}
+                    </span>
+                  </td>
+
+                  {/* 문항 형식 */}
+                  <td className="px-3 py-2 text-center">
+                    <span
+                      className="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold"
+                      style={{
+                        background: qa.question_format === 'subjective' ? '#eef2ff' : 'var(--accent-lt)',
+                        color: qa.question_format === 'subjective' ? '#4338ca' : 'var(--accent)',
+                      }}
+                    >
+                      {questionFormatLabel(qa.question_format)}
                     </span>
                   </td>
 
@@ -1637,6 +1658,14 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
                     }}
                   >
                     {ans ? `${ans.earned_score}점` : '–'}
+                  </td>
+
+                  {/* 배점 */}
+                  <td
+                    className="px-3 py-2 text-center text-sm font-semibold"
+                    style={{ color: 'var(--fg-sub)' }}
+                  >
+                    {qa.score}점
                   </td>
 
                   {/* 찍음 */}

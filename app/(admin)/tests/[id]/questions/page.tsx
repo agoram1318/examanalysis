@@ -24,6 +24,7 @@ type SmallUnit  = { id: number; name: string; middle_unit_id: number };
 
 type QuestionForm = {
   question_number: number;
+  question_format: 'objective' | 'subjective';
   answer: string;
   score: number;
   major_unit_id: number | null;
@@ -50,6 +51,7 @@ const DIFFICULTY_LABELS: Record<number, string> = {
 function makeDefaultQuestion(num: number): QuestionForm {
   return {
     question_number: num,
+    question_format: 'objective',
     answer: '',
     score: 4,
     major_unit_id: null,
@@ -101,10 +103,23 @@ const QuestionRow = React.memo(function QuestionRow({
 
       {/* 정답 */}
       <td className="px-2 py-2">
+        <select
+          className={cellInput}
+          style={{ ...cellBorder, width: 96 }}
+          value={q.question_format}
+          onChange={e => onChange(idx, { question_format: e.target.value as QuestionForm['question_format'] })}
+        >
+          <option value="objective">객관식</option>
+          <option value="subjective">주관식</option>
+        </select>
+      </td>
+
+      {/* 정답 */}
+      <td className="px-2 py-2">
         <input
           className={cellInput}
-          style={{ ...cellBorder, width: 72 }}
-          placeholder="정답"
+          style={{ ...cellBorder, width: q.question_format === 'objective' ? 72 : 160 }}
+          placeholder={q.question_format === 'objective' ? '1~5' : '예: x=2, 3/2'}
           value={q.answer}
           onChange={e => onChange(idx, { answer: e.target.value })}
         />
@@ -310,7 +325,7 @@ export default function QuestionsPage({
       const { data: existingQs } = await supabase
         .from('questions')
         .select(
-          'question_number, answer, score, major_unit_id, middle_unit_id, small_unit_id, difficulty, question_comment'
+          'question_number, question_format, answer, score, major_unit_id, middle_unit_id, small_unit_id, difficulty, question_comment'
         )
         .eq('test_id', testId)
         .order('question_number');
@@ -319,6 +334,7 @@ export default function QuestionsPage({
         setQuestions(
           existingQs.map(q => ({
             question_number: q.question_number,
+            question_format: (q.question_format === 'subjective' ? 'subjective' : 'objective') as QuestionForm['question_format'],
             answer:          q.answer ?? '',
             score:           Number(q.score) || 4,
             major_unit_id:   q.major_unit_id ?? null,
@@ -389,6 +405,7 @@ export default function QuestionsPage({
     const rows = questions.map(q => ({
       test_id:         testId,
       question_number: q.question_number,
+      question_format: q.question_format,
       answer:          q.answer.trim() || null,
       score:           q.score,
       subject_id:      test?.subject_id ?? null,
@@ -538,11 +555,12 @@ export default function QuestionsPage({
         </div>
 
         <div className="overflow-x-auto">
-          <table style={{ minWidth: 980, borderCollapse: 'collapse', width: '100%' }}>
+          <table style={{ minWidth: 1080, borderCollapse: 'collapse', width: '100%' }}>
             <thead style={{ background: 'var(--bg-base)' }}>
               <tr>
                 {[
                   { label: '번호',      w: 56  },
+                  { label: '문항 형식', w: 112 },
                   { label: '정답',      w: 88  },
                   { label: '배점',      w: 72  },
                   { label: '대단원',    w: 152 },
