@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft, Save, AlertCircle, Loader2, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Button from '@/components/ui/Button';
+import { formatScoreValue } from '@/lib/report-utils';
 
 // ─────────────────────────────────────────────
 // 타입 정의
@@ -26,7 +27,7 @@ type QuestionForm = {
   question_number: number;
   question_format: 'objective' | 'subjective';
   answer: string;
-  score: number;
+  score: string;
   major_unit_id: number | null;
   middle_unit_id: number | null;
   small_unit_id: number | null;
@@ -48,12 +49,69 @@ const DIFFICULTY_LABELS: Record<number, string> = {
   8: '8 — 고난도',
 };
 
+function parseScore(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const score = Number(trimmed);
+  return Number.isFinite(score) && score > 0 ? score : null;
+}
+
+function roundScore(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function formatScoreFixed(value: number): string {
+  return value.toFixed(2);
+}
+
+function buildScorePlan(questions: QuestionForm[]): {
+  resolvedScores: number[];
+  autoScores: (number | null)[];
+  explicitTotal: number;
+  resolvedTotal: number;
+  blankCount: number;
+  invalidCount: number;
+  canAutoAllocate: boolean;
+} {
+  const parsed = questions.map((q) => parseScore(q.score));
+  const invalidCount = questions.filter((q, index) => q.score.trim() !== '' && parsed[index] === null).length;
+  const blankIndexes = parsed
+    .map((score, index) => (score === null && questions[index].score.trim() === '' ? index : -1))
+    .filter((index) => index >= 0);
+  const explicitTotal = parsed.reduce<number>((sum, score) => sum + (score ?? 0), 0);
+  const remaining = 100 - explicitTotal;
+  const canAutoAllocate = blankIndexes.length === 0 || remaining > 0;
+  const resolvedScores = parsed.map((score) => score ?? 0);
+  const autoScores: (number | null)[] = questions.map(() => null);
+
+  if (blankIndexes.length > 0 && canAutoAllocate) {
+    const remainingCents = Math.round(remaining * 100);
+    const baseCents = Math.floor(remainingCents / blankIndexes.length);
+    const extraCents = remainingCents - baseCents * blankIndexes.length;
+    blankIndexes.forEach((questionIndex, order) => {
+      const value = (baseCents + (order < extraCents ? 1 : 0)) / 100;
+      resolvedScores[questionIndex] = value;
+      autoScores[questionIndex] = value;
+    });
+  }
+
+  return {
+    resolvedScores,
+    autoScores,
+    explicitTotal: roundScore(explicitTotal),
+    resolvedTotal: roundScore(resolvedScores.reduce((sum, score) => sum + score, 0)),
+    blankCount: blankIndexes.length,
+    invalidCount,
+    canAutoAllocate,
+  };
+}
+
 function makeDefaultQuestion(num: number): QuestionForm {
   return {
     question_number: num,
     question_format: 'objective',
     answer: '',
-    score: 4,
+    score: '',
     major_unit_id: null,
     middle_unit_id: null,
     small_unit_id: null,
@@ -75,6 +133,7 @@ const cellBorder = { borderColor: 'var(--border)' };
 type RowProps = {
   q: QuestionForm;
   idx: number;
+  autoScore: number | null;
   majorUnits: MajorUnit[];
   allMiddles: MiddleUnit[];
   allSmalls: SmallUnit[];
@@ -82,7 +141,7 @@ type RowProps = {
 };
 
 const QuestionRow = React.memo(function QuestionRow({
-  q, idx, majorUnits, allMiddles, allSmalls, onChange,
+  q, idx, autoScore, majorUnits, allMiddles, allSmalls, onChange,
 }: RowProps) {
   const filteredMiddles = allMiddles.filter(m => m.major_unit_id === q.major_unit_id);
   const filteredSmalls  = allSmalls.filter(s => s.middle_unit_id === q.middle_unit_id);
@@ -129,12 +188,14 @@ const QuestionRow = React.memo(function QuestionRow({
       <td className="px-2 py-2">
         <input
           type="number"
-          min="1"
+          min="0.1"
+          step="0.01"
           max="100"
           className={cellInput}
-          style={{ ...cellBorder, width: 56 }}
+          style={{ ...cellBorder, width: 72 }}
           value={q.score}
-          onChange={e => onChange(idx, { score: Math.max(1, parseInt(e.target.value) || 1) })}
+          placeholder={autoScore === null ? '배점' : `자동 ${formatScoreValue(autoScore)}점`}
+          onChange={e => onChange(idx, { score: e.target.value })}
         />
       </td>
 
@@ -336,7 +397,7 @@ export default function QuestionsPage({
             question_number: q.question_number,
             question_format: (q.question_format === 'subjective' ? 'subjective' : 'objective') as QuestionForm['question_format'],
             answer:          q.answer ?? '',
-            score:           Number(q.score) || 4,
+            score:           q.score === null || q.score === undefined ? '' : String(Number(q.score)),
             major_unit_id:   q.major_unit_id ?? null,
             middle_unit_id:  q.middle_unit_id ?? null,
             small_unit_id:   q.small_unit_id ?? null,
@@ -389,6 +450,16 @@ export default function QuestionsPage({
       return;
     }
 
+    const scorePlan = buildScorePlan(questions);
+    if (scorePlan.invalidCount > 0) {
+      setSaveError('배점은 0보다 큰 숫자로 입력해주세요. 비워둔 문항은 저장 시 자동 배점됩니다.');
+      return;
+    }
+    if (!scorePlan.canAutoAllocate) {
+      setSaveError('직접 입력한 배점 합계가 100점 이상이라 빈 배점 문항에 자동 배점할 점수가 없습니다.');
+      return;
+    }
+
     setSaving(true);
 
     const { error: delErr } = await supabase
@@ -402,12 +473,12 @@ export default function QuestionsPage({
       return;
     }
 
-    const rows = questions.map(q => ({
+    const rows = questions.map((q, index) => ({
       test_id:         testId,
       question_number: q.question_number,
       question_format: q.question_format,
       answer:          q.answer.trim() || null,
-      score:           q.score,
+      score:           scorePlan.resolvedScores[index],
       subject_id:      test?.subject_id ?? null,
       major_unit_id:   q.major_unit_id,
       middle_unit_id:  q.middle_unit_id,
@@ -427,7 +498,8 @@ export default function QuestionsPage({
     router.push(`/tests/${testId}/classes/new`);
   };
 
-  const totalScore = questions.reduce((s, q) => s + q.score, 0);
+  const scorePlan = buildScorePlan(questions);
+  const totalScore = scorePlan.resolvedTotal;
 
   // ── 로딩
   if (loading) {
@@ -490,7 +562,7 @@ export default function QuestionsPage({
           <span className="text-sm" style={{ color: 'var(--fg-sub)' }}>
             {questions.length}문항 ·{' '}
             <span className="font-semibold" style={{ color: 'var(--fg-main)' }}>
-              합계 {totalScore}점
+              예상 합계 {formatScoreFixed(totalScore)}점
             </span>
           </span>
           <Button variant="accent" onClick={handleSave} loading={saving} disabled={saving}>
@@ -508,6 +580,7 @@ export default function QuestionsPage({
           { label: '테스트명', value: test.title },
           { label: '학년',    value: test.grade || '–' },
           { label: '총 문항', value: `${test.total_questions}문항` },
+          { label: '배점 합계', value: `${formatScoreFixed(totalScore)}점${scorePlan.blankCount > 0 ? ' (예상)' : ''}` },
         ].map(item => (
           <div key={item.label} className="flex items-center gap-2 text-sm">
             <span style={{ color: 'var(--fg-muted)' }}>{item.label}</span>
@@ -536,6 +609,23 @@ export default function QuestionsPage({
           {saveError}
         </div>
       )}
+
+      <div
+        className="px-4 py-3 mb-4 rounded-lg border text-sm"
+        style={{
+          background: scorePlan.resolvedTotal === 100 ? '#f0fdf4' : '#fff7ed',
+          borderColor: scorePlan.resolvedTotal === 100 ? '#86efac' : '#fdba74',
+          color: scorePlan.resolvedTotal === 100 ? '#166534' : '#9a3412',
+        }}
+      >
+        현재 배점 합계: <strong>{formatScoreFixed(totalScore)}점</strong>
+        {scorePlan.blankCount > 0 && (
+          <span> · 배점 미입력 {scorePlan.blankCount}문항은 저장 시 자동 배점됩니다.</span>
+        )}
+        {scorePlan.blankCount === 0 && scorePlan.resolvedTotal !== 100 && (
+          <span> · 100점이 아닙니다. 입력된 배점을 그대로 저장합니다.</span>
+        )}
+      </div>
 
       {/* ── 문항 입력 테이블 ── */}
       <div
@@ -590,6 +680,7 @@ export default function QuestionsPage({
                   key={q.question_number}
                   q={q}
                   idx={idx}
+                  autoScore={scorePlan.autoScores[idx]}
                   majorUnits={majorUnits}
                   allMiddles={allMiddles}
                   allSmalls={allSmalls}

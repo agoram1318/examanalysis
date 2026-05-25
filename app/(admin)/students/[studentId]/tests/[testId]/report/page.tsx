@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { fetchTestsForClass } from '@/lib/class-tests';
+import { formatScoreValue, getSubjectDisplayName, scoreOrFallback } from '@/lib/report-utils';
 import Button from '@/components/ui/Button';
 import PrintReportLink from '@/components/reports/PrintReportLink';
 
@@ -781,14 +782,14 @@ function ScoreCompareBar({
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm font-bold" style={{ color: 'var(--fg-main)' }}>내 점수 vs 전체 평균</p>
         <p className="text-xs" style={{ color: 'var(--fg-muted)' }}>
-          {cohortAverage === null ? '응시 데이터 부족' : `전체 평균 ${cohortAverage.toFixed(1)}점`}
+          {cohortAverage === null ? '응시 데이터 부족' : `전체 평균 ${formatScoreValue(cohortAverage)}점`}
         </p>
       </div>
       <div className="space-y-3">
         <div>
           <div className="mb-1 flex justify-between text-xs font-semibold" style={{ color: 'var(--fg-sub)' }}>
             <span>내 점수</span>
-            <span>{studentScore}점</span>
+            <span>{formatScoreValue(studentScore)}점</span>
           </div>
           <div className="h-3 rounded-full bg-stone-200">
             <div className="h-3 rounded-full" style={{ width: `${Math.min(100, studentRate)}%`, background: 'var(--accent)' }} />
@@ -797,7 +798,7 @@ function ScoreCompareBar({
         <div>
           <div className="mb-1 flex justify-between text-xs font-semibold" style={{ color: 'var(--fg-sub)' }}>
             <span>전체 평균</span>
-            <span>{cohortAverage === null ? '산출 전' : `${cohortAverage.toFixed(1)}점`}</span>
+            <span>{cohortAverage === null ? '산출 전' : `${formatScoreValue(cohortAverage)}점`}</span>
           </div>
           <div className="h-3 rounded-full bg-stone-200">
             <div className="h-3 rounded-full bg-slate-500" style={{ width: `${Math.min(100, averageRate)}%` }} />
@@ -962,9 +963,10 @@ export default function StudentReportPage({
       }
 
       const subjectsRaw = testRaw.subjects as unknown as { name: string } | { name: string }[] | null;
-      const subjectName = Array.isArray(subjectsRaw)
+      const subjectNameRaw = Array.isArray(subjectsRaw)
         ? (subjectsRaw[0]?.name ?? null)
         : (subjectsRaw?.name ?? null);
+      const subjectName = getSubjectDisplayName(subjectNameRaw);
       setTest({
         id:           testRaw.id,
         title:        testRaw.title,
@@ -1000,13 +1002,14 @@ export default function StudentReportPage({
         return typeof value === 'number' ? value : 9999;
       }
 
+      const questionCount = questionsRaw?.length ?? 0;
       const questions: QuestionRow[] = (questionsRaw ?? []).map((q) => {
         return {
           id:               q.id,
           question_number:  q.question_number,
           question_format:  q.question_format === 'subjective' ? 'subjective' : 'objective',
           answer:           q.answer,
-          score:            Number(q.score),
+          score:            scoreOrFallback(q.score, questionCount),
           difficulty:       q.difficulty,
           question_comment: q.question_comment ?? null,
           major_unit_name:  pickName(q.units_major),
@@ -1183,8 +1186,8 @@ export default function StudentReportPage({
   ];
 
   const primaryCards = [
-    { label: '총점', value: `${totalScore} / ${totalPossible}점`, sub: '획득 점수', accent: true },
-    { label: '전체 응시자 평균점수', value: cohortAverage === null ? '산출 전' : `${cohortAverage.toFixed(1)}점`, sub: cohortAverage === null ? '응시 데이터 부족' : `완료 ${completedStudentScores.length}명 기준`, accent: false },
+    { label: '총점', value: `${formatScoreValue(totalScore)} / ${formatScoreValue(totalPossible)}점`, sub: '획득 점수', accent: true },
+    { label: '전체 응시자 평균점수', value: cohortAverage === null ? '산출 전' : `${formatScoreValue(cohortAverage)}점`, sub: cohortAverage === null ? '응시 데이터 부족' : `완료 ${completedStudentScores.length}명 기준`, accent: false },
     { label: '취약 단원', value: weakestUnit ? cleanStatName(weakestUnit.name) : '–', sub: correctRateText(weakestUnit), accent: false },
     { label: '보완 난이도', value: weakestDiff ? cleanStatName(weakestDiff.name) : '–', sub: correctRateText(weakestDiff), accent: false },
   ];
@@ -1657,7 +1660,7 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
                       color: hasAnswer && ans.is_correct ? '#16a34a' : 'var(--fg-muted)',
                     }}
                   >
-                    {ans ? `${ans.earned_score}점` : '–'}
+                    {ans ? `${formatScoreValue(ans.earned_score)}점` : '–'}
                   </td>
 
                   {/* 배점 */}
@@ -1665,7 +1668,7 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
                     className="px-3 py-2 text-center text-sm font-semibold"
                     style={{ color: 'var(--fg-sub)' }}
                   >
-                    {qa.score}점
+                    {formatScoreValue(qa.score)}점
                   </td>
 
                   {/* 찍음 */}

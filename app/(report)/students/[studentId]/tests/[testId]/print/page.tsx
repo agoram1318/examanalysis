@@ -10,6 +10,9 @@ import {
   difficultyGroup,
   DIFF_ORDER,
   formatReportDate,
+  getSubjectDisplayName,
+  scoreOrFallback,
+  formatScoreValue,
   type GroupStat,
 } from '@/lib/report-utils';
 import ReportPage from '@/components/reports/ReportPage';
@@ -576,7 +579,7 @@ function ScoreCompareBar({
     <div className="rounded-lg border bg-white px-3 py-3" style={{ borderColor: 'var(--border)' }}>
       <div className="mb-2 flex items-center justify-between">
         <p className="text-xs font-bold text-stone-950">내 점수 vs 전체 평균</p>
-        <p className="text-[11px] text-stone-500">{cohortAverage === null ? '응시 데이터 부족' : `전체 평균 ${cohortAverage.toFixed(1)}점`}</p>
+        <p className="text-[11px] text-stone-500">{cohortAverage === null ? '응시 데이터 부족' : `전체 평균 ${formatScoreValue(cohortAverage)}점`}</p>
       </div>
       <div className="space-y-2">
         {[
@@ -586,7 +589,7 @@ function ScoreCompareBar({
           <div key={String(label)}>
             <div className="mb-1 flex justify-between text-[11px] font-semibold text-stone-600">
               <span>{label}</span>
-              <span>{typeof value === 'number' ? `${value.toFixed(label === '내 점수' ? 0 : 1)}점` : '산출 전'}</span>
+              <span>{typeof value === 'number' ? `${formatScoreValue(value)}점` : '산출 전'}</span>
             </div>
             <div className="h-2.5 rounded-full bg-stone-200">
               <div className="h-2.5 rounded-full" style={{ width: `${Math.min(100, Number(rate))}%`, background: String(color) }} />
@@ -735,7 +738,7 @@ export default function StudentPrintPage({
         return;
       }
 
-      const subjectName = pickUnitName(testRaw.subjects);
+      const subjectName = getSubjectDisplayName(pickUnitName(testRaw.subjects));
       setMeta([
         { label: '학생명', value: studentData.student_name },
         { label: '학생 코드', value: studentData.student_code || '–' },
@@ -766,12 +769,13 @@ export default function StudentPrintPage({
         return typeof value === 'number' ? value : 9999;
       }
 
+      const questionCount = questionsRaw?.length ?? 0;
       const questions: Omit<QA, 'ans'>[] = (questionsRaw ?? []).map((q) => ({
         id: q.id,
         question_number: q.question_number,
         question_format: q.question_format === 'subjective' ? 'subjective' : 'objective',
         answer: q.answer,
-        score: Number(q.score),
+        score: scoreOrFallback(q.score, questionCount),
         difficulty: q.difficulty,
         question_comment: q.question_comment ?? null,
         major_unit_name: pickUnitName(q.units_major),
@@ -935,8 +939,8 @@ export default function StudentPrintPage({
             <div className="grid grid-cols-[120px_1fr] gap-2">
               <AccuracyGauge rate={scoreRate} correct={correctCount} total={qaRows.length} />
               <div className="grid grid-cols-2 gap-2">
-                <MiniSummaryCard label="총점" value={`${totalScore} / ${totalPossible}점`} sub="획득 점수" accent />
-                <MiniSummaryCard label="전체 응시자 평균점수" value={cohortAverage === null ? '산출 전' : `${cohortAverage.toFixed(1)}점`} sub={cohortAverage === null ? '응시 데이터 부족' : `완료 ${completedStudentScores.length}명 기준`} />
+                <MiniSummaryCard label="총점" value={`${formatScoreValue(totalScore)} / ${formatScoreValue(totalPossible)}점`} sub="획득 점수" accent />
+                <MiniSummaryCard label="전체 응시자 평균점수" value={cohortAverage === null ? '산출 전' : `${formatScoreValue(cohortAverage)}점`} sub={cohortAverage === null ? '응시 데이터 부족' : `완료 ${completedStudentScores.length}명 기준`} />
                 <MiniSummaryCard label="취약 단원" value={weakestUnit ? cleanStatName(weakestUnit.name) : '–'} sub={correctRateText(weakestUnit)} />
                 <MiniSummaryCard label="보완 난이도" value={weakestDiff ? cleanStatName(weakestDiff.name) : '–'} sub={correctRateText(weakestDiff)} />
               </div>
@@ -1018,8 +1022,8 @@ export default function StudentPrintPage({
                       <ReportTd align="center" className={ans?.is_correct ? 'text-green-700 font-semibold' : ans && hasAnswer ? 'text-red-600 font-semibold' : ''}>
                         {result}
                       </ReportTd>
-                      <ReportTd align="center">{ans ? `${ans.earned_score}` : '–'}</ReportTd>
-                      <ReportTd align="center">{qa.score}</ReportTd>
+                      <ReportTd align="center">{ans ? formatScoreValue(ans.earned_score) : '–'}</ReportTd>
+                      <ReportTd align="center">{formatScoreValue(qa.score)}</ReportTd>
                       <ReportTd align="center">{ans?.is_guessed ? 'O' : '–'}</ReportTd>
                       <ReportTd align="center">{ans?.is_blank ? 'O' : '–'}</ReportTd>
                       <ReportTd align="center">{qa.major_unit_name ?? '–'}</ReportTd>

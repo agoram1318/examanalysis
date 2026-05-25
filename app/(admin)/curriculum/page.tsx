@@ -11,6 +11,7 @@ import { Plus, Pencil, Trash2, BookMarked, ChevronRight } from 'lucide-react';
 import { getSubjects, getChapters, saveSubject, deleteSubject, saveChapter, deleteChapter, generateId } from '@/lib/store';
 import { Subject, Chapter } from '@/lib/types';
 import { getLevelLabel } from '@/lib/utils';
+import { getSubjectDisplayName } from '@/lib/report-utils';
 
 const LEVEL_COLORS = {
   major: 'bg-blue-50 border-blue-200',
@@ -133,7 +134,7 @@ export default function CurriculumPage() {
             }`}
             onClick={() => setSelectedSubject(s.id)}
           >
-            {s.name}
+            {getSubjectDisplayName(s.name) ?? s.name}
             <Button
               size="sm"
               variant="ghost"
@@ -153,7 +154,7 @@ export default function CurriculumPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>{subjects.find(s => s.id === selectedSubject)?.name ?? '과목'} 단원 구조</CardTitle>
+            <CardTitle>{getSubjectDisplayName(subjects.find(s => s.id === selectedSubject)?.name) ?? '과목'} 단원 구조</CardTitle>
             <Button size="sm" variant="outline" onClick={() => openChapterModal(undefined, undefined, 'major')}>
               <Plus size={14} /> 대단원 추가
             </Button>

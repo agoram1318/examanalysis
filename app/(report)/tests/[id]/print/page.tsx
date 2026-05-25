@@ -12,7 +12,7 @@ import {
   computeEstimatedGrade,
   generateTestWideComment,
 } from '@/lib/test-wide-analysis';
-import { pickUnitName, formatReportDate } from '@/lib/report-utils';
+import { pickUnitName, formatReportDate, getSubjectDisplayName, scoreOrFallback, formatScoreValue } from '@/lib/report-utils';
 import ReportPage from '@/components/reports/ReportPage';
 import ReportHeader from '@/components/reports/ReportHeader';
 import ReportSection from '@/components/reports/ReportSection';
@@ -107,11 +107,12 @@ export default function TestPrintPage({ params }: { params: Promise<{ id: string
         .eq('test_id', testId)
         .order('question_number');
 
+      const questionCount = questionsRaw?.length ?? 0;
       const qs = (questionsRaw ?? []).map((q) => ({
         id: q.id,
         question_number: q.question_number,
         answer: q.answer,
-        score: Number(q.score),
+        score: scoreOrFallback(q.score, questionCount),
         question_comment: q.question_comment ?? null,
       }));
       setQuestions(qs);
@@ -119,7 +120,7 @@ export default function TestPrintPage({ params }: { params: Promise<{ id: string
       setMeta([
         { label: '테스트명', value: testRaw.title },
         { label: '학년', value: testRaw.grade || '–' },
-        { label: '과목', value: pickUnitName(testRaw.subjects) || '–' },
+        { label: '과목', value: getSubjectDisplayName(pickUnitName(testRaw.subjects)) || '–' },
         { label: '총 문항 수', value: `${qs.length}문항` },
         { label: '부여된 반 수', value: `${(classesRaw ?? []).length}개` },
       ]);
@@ -290,10 +291,10 @@ export default function TestPrintPage({ params }: { params: Promise<{ id: string
               cards={[
                 { label: '응시자 수', value: `${students.length}명` },
                 { label: '완료자 수', value: `${completedStats.length}명` },
-                { label: '평균 점수', value: `${avgScore.toFixed(1)}점`, accent: true },
-                { label: '최고점', value: `${scores.length ? Math.max(...scores).toFixed(1) : 0}점` },
-                { label: '최저점', value: `${scores.length ? Math.min(...scores).toFixed(1) : 0}점` },
-                { label: '중앙값', value: `${computeMedian(scores).toFixed(1)}점` },
+                { label: '평균 점수', value: `${formatScoreValue(avgScore)}점`, accent: true },
+                { label: '최고점', value: `${formatScoreValue(scores.length ? Math.max(...scores) : 0)}점` },
+                { label: '최저점', value: `${formatScoreValue(scores.length ? Math.min(...scores) : 0)}점` },
+                { label: '중앙값', value: `${formatScoreValue(computeMedian(scores))}점` },
                 { label: '평균 정답률', value: `${avgRate.toFixed(1)}%`, accent: true },
                 { label: '전체 찍음', value: `${totalGuessed}개` },
                 { label: '평균 찍음 비율', value: `${avgGuessRateFixed.toFixed(1)}%` },
@@ -343,9 +344,9 @@ export default function TestPrintPage({ params }: { params: Promise<{ id: string
                   <ReportTd>{c.cls.academy_name || '–'}</ReportTd>
                   <ReportTd>{c.cls.teacher_name || '–'}</ReportTd>
                   <ReportTd align="center">{c.count}</ReportTd>
-                  <ReportTd align="center">{c.avgScore.toFixed(1)}</ReportTd>
-                  <ReportTd align="center">{c.maxScore.toFixed(1)}</ReportTd>
-                  <ReportTd align="center">{c.minScore.toFixed(1)}</ReportTd>
+                  <ReportTd align="center">{formatScoreValue(c.avgScore)}</ReportTd>
+                  <ReportTd align="center">{formatScoreValue(c.maxScore)}</ReportTd>
+                  <ReportTd align="center">{formatScoreValue(c.minScore)}</ReportTd>
                   <ReportTd align="center">{c.avgRate.toFixed(1)}%</ReportTd>
                 </ReportTr>
               ))}
@@ -365,7 +366,7 @@ export default function TestPrintPage({ params }: { params: Promise<{ id: string
                   <ReportTd align="center">{s.rank}</ReportTd>
                   <ReportTd>{s.student.student_name}</ReportTd>
                   <ReportTd>{s.cls?.class_name || '–'}</ReportTd>
-                  <ReportTd align="center" className="font-semibold">{s.totalScore.toFixed(1)}</ReportTd>
+                  <ReportTd align="center" className="font-semibold">{formatScoreValue(s.totalScore)}</ReportTd>
                   <ReportTd align="center">{s.correctCount}</ReportTd>
                   <ReportTd align="center">{s.wrongCount}</ReportTd>
                   <ReportTd align="center">{s.blankCount}</ReportTd>
@@ -384,7 +385,7 @@ export default function TestPrintPage({ params }: { params: Promise<{ id: string
                 <ReportTr key={s.q.id} stripedIndex={i} highlight={s.correctRate < 40 ? 'danger' : undefined}>
                   <ReportTd align="center">{s.q.question_number}</ReportTd>
                   <ReportTd align="center">{s.q.answer ?? '–'}</ReportTd>
-                  <ReportTd align="center">{s.q.score}</ReportTd>
+                  <ReportTd align="center">{formatScoreValue(s.q.score)}</ReportTd>
                   <ReportTd align="center">{s.correctCount}</ReportTd>
                   <ReportTd align="center">{s.wrongCount}</ReportTd>
                   <ReportTd align="center">{s.blankCount}</ReportTd>

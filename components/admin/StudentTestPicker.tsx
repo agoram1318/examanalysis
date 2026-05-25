@@ -8,6 +8,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { fetchTestsForClass, type TestSummary } from '@/lib/class-tests';
 import Button from '@/components/ui/Button';
+import { getSubjectDisplayName } from '@/lib/report-utils';
 
 type StudentInfo = {
   id: number;
@@ -65,7 +66,8 @@ export default function StudentTestPicker({ studentId }: { studentId: number }) 
         const t = q?.tests;
         if (!t || byId.has(t.id)) continue;
         const sub = t.subjects;
-        const subject_name = Array.isArray(sub) ? (sub[0]?.name ?? null) : (sub?.name ?? null);
+        const rawSubjectName = Array.isArray(sub) ? (sub[0]?.name ?? null) : (sub?.name ?? null);
+        const subject_name = getSubjectDisplayName(rawSubjectName);
         byId.set(t.id, {
           id: t.id,
           title: t.title,

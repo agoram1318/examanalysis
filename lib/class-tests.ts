@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
+import { getSubjectDisplayName } from '@/lib/report-utils';
 
 export type TestSummary = {
   id: number;
@@ -13,8 +14,8 @@ type SubjectRaw = { name: string } | { name: string }[] | null;
 
 function pickSubjectName(raw: SubjectRaw): string | null {
   if (!raw) return null;
-  if (Array.isArray(raw)) return raw[0]?.name ?? null;
-  return raw.name ?? null;
+  const name = Array.isArray(raw) ? (raw[0]?.name ?? null) : (raw.name ?? null);
+  return getSubjectDisplayName(name);
 }
 
 /** 반에 부여된 테스트 목록 (class_tests + 레거시 classes.test_id) */

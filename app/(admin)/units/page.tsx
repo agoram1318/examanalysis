@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { BookOpen, Plus, Pencil, Check, X, Loader2, AlertCircle, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Button from '@/components/ui/Button';
+import { getSubjectDisplayName } from '@/lib/report-utils';
 
 // ─────────────────────────────────────────────
 // 타입
@@ -407,7 +408,7 @@ export default function UnitsPage() {
   // 렌더
   // ─────────────────────────────────────────────
 
-  const selSubjectName = subjects.find((s) => s.id === selSubject)?.name;
+  const selSubjectName = getSubjectDisplayName(subjects.find((s) => s.id === selSubject)?.name);
   const selMajorName   = majors.find((m) => m.id === selMajor)?.name;
   const selMiddleName  = middles.find((m) => m.id === selMiddle)?.name;
 
@@ -421,7 +422,7 @@ export default function UnitsPage() {
       disabled:    false,
       disabledMsg: undefined as string | undefined,
       items: subjects.map((s) => ({
-        item:       s,
+        item:       { ...s, name: getSubjectDisplayName(s.name) ?? s.name },
         selected:   s.id === selSubject,
         onSelect:   () => selectSubject(s.id),
         onRename:   renameSubject,

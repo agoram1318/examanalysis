@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { createClassWithTestAssignment } from '@/lib/class-tests';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
+import { getSubjectDisplayName } from '@/lib/report-utils';
 import Input from '@/components/ui/Input';
 
 type TestRow = {
@@ -166,7 +167,7 @@ export default function NewClassPage({
       >
         {[
           { label: '테스트명', value: test.title },
-          { label: '과목',    value: test.subjects?.name ?? '–' },
+          { label: '과목',    value: getSubjectDisplayName(test.subjects?.name) ?? '–' },
           { label: '학년',    value: test.grade ?? '–' },
           { label: '총 문항', value: `${test.total_questions}문항` },
         ].map((item) => (

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { fetchTestsForClass } from '@/lib/class-tests';
+import { formatScoreValue, scoreOrFallback } from '@/lib/report-utils';
 import { Card, CardContent } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 
@@ -194,9 +195,11 @@ export default function AnswersPage({
         .eq('test_id', testId)
         .order('question_number');
 
+      const questionCount = questionsData?.length ?? 0;
       const qs = (questionsData ?? []).map((q) => ({
         ...q,
         question_format: q.question_format === 'subjective' ? 'subjective' : 'objective',
+        score: scoreOrFallback(q.score, questionCount),
       })) as QuestionRow[];
       setQuestions(qs);
 
@@ -593,9 +596,9 @@ export default function AnswersPage({
                     <span className="font-semibold" style={{ color: 'var(--fg-main)' }}>
                       현재 점수{' '}
                       <strong style={{ color: 'var(--accent)' }}>
-                        {summary.score}
+                        {formatScoreValue(summary.score)}
                       </strong>
-                      {' '}/ {totalScore}점
+                      {' '}/ {formatScoreValue(totalScore)}점
                     </span>
                   </div>
                 </div>
@@ -715,7 +718,7 @@ export default function AnswersPage({
                                 className="px-3 py-2 text-center text-sm"
                                 style={{ color: 'var(--fg-sub)' }}
                               >
-                                {q.score}점
+                                {formatScoreValue(q.score)}점
                               </td>
 
                               {/* 학생 답안 */}
@@ -832,7 +835,7 @@ export default function AnswersPage({
                                     hasAnswer && is_correct ? '#16a34a' : 'var(--fg-muted)',
                                 }}
                               >
-                                {hasAnswer ? `${earned_score}점` : '–'}
+                                {hasAnswer ? `${formatScoreValue(earned_score)}점` : '–'}
                               </td>
                             </tr>
                           );

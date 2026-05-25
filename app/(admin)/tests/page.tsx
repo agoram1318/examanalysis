@@ -8,6 +8,7 @@ import Badge from '@/components/ui/Badge';
 import { Plus, ClipboardList, Edit2, Users, Loader2, ChevronRight, BarChart3, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/utils';
+import { getSubjectDisplayName } from '@/lib/report-utils';
 import Modal from '@/components/ui/Modal';
 
 type TestRow = {
@@ -166,7 +167,8 @@ export default function TestsPage() {
       ) : (
         <div className="space-y-3">
           {tests.map((test) => {
-            const meta = [test.grade, test.subjects?.name].filter(Boolean).join(' · ');
+            const subjectName = getSubjectDisplayName(test.subjects?.name);
+            const meta = [test.grade, subjectName].filter(Boolean).join(' · ');
             return (
               <div
                 key={test.id}
@@ -183,8 +185,8 @@ export default function TestsPage() {
                       >
                         {test.title}
                       </h3>
-                      {test.subjects?.name && (
-                        <Badge variant="info">{test.subjects.name}</Badge>
+                      {subjectName && (
+                        <Badge variant="info">{subjectName}</Badge>
                       )}
                       <Badge variant="outline">{test.total_questions}문항</Badge>
                     </div>

@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
+import { getSubjectDisplayName } from '@/lib/report-utils';
 
 // ── Supabase subjects 행 타입
 type SubjectRow = { id: number; name: string };
@@ -174,7 +175,7 @@ export default function NewTestPage() {
                 value={form.subject_id}
                 onChange={handleChange('subject_id')}
                 disabled={subjectsLoading || !!subjectsError}
-                options={subjects.map((s) => ({ value: String(s.id), label: s.name }))}
+                options={subjects.map((s) => ({ value: String(s.id), label: getSubjectDisplayName(s.name) ?? s.name }))}
                 placeholder={
                   subjectsLoading
                     ? '과목 불러오는 중…'

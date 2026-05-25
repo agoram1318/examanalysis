@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase/client';
 import { fetchTestsForClass } from '@/lib/class-tests';
 import Button from '@/components/ui/Button';
 import PrintReportLink from '@/components/reports/PrintReportLink';
+import { formatScoreValue, getSubjectDisplayName, scoreOrFallback } from '@/lib/report-utils';
 
 // ─────────────────────────────────────────────
 // 타입
@@ -237,12 +238,12 @@ export default function ClassAnalysisPage({
         .single();
 
       if (testErr || !testRaw) { setNotFound(true); setLoading(false); return; }
-      const subjectName = (() => {
+      const subjectName = getSubjectDisplayName((() => {
         const s = testRaw.subjects as unknown as UnitRaw;
         if (!s) return null;
         if (Array.isArray(s)) return s[0]?.name ?? null;
         return (s as { name: string }).name ?? null;
-      })();
+      })());
       setTest({ id: testRaw.id, title: testRaw.title, grade: testRaw.grade, subject_name: subjectName });
 
       // 3. 학생 + 문항 (병렬)
@@ -259,11 +260,12 @@ export default function ClassAnalysisPage({
       const studentsData = studentsRes.data ?? [];
       setStudents(studentsData);
 
+      const questionCount = questionsRes.data?.length ?? 0;
       const qs: QuestionRow[] = (questionsRes.data ?? []).map((q) => ({
         id:               q.id,
         question_number:  q.question_number,
         answer:           q.answer,
-        score:            Number(q.score),
+        score:            scoreOrFallback(q.score, questionCount),
         difficulty:       q.difficulty,
         question_comment: q.question_comment ?? null,
         major_unit_name:  pickName(q.units_major),
@@ -448,9 +450,9 @@ export default function ClassAnalysisPage({
 
   const summaryCards = [
     { label: '응시 인원',     value: `${students.length}명`,             accent: false },
-    { label: '평균 점수',     value: `${avgScore.toFixed(1)}점`,          accent: true  },
-    { label: '최고점',        value: `${maxScore.toFixed(1)}점`,          accent: false },
-    { label: '최저점',        value: `${minScore.toFixed(1)}점`,          accent: false },
+    { label: '평균 점수',     value: `${formatScoreValue(avgScore)}점`,          accent: true  },
+    { label: '최고점',        value: `${formatScoreValue(maxScore)}점`,          accent: false },
+    { label: '최저점',        value: `${formatScoreValue(minScore)}점`,          accent: false },
     { label: '평균 정답률',   value: `${avgRate.toFixed(1)}%`,            accent: true  },
     { label: '총 찍음 수',    value: `${totalGuessed}개`,                 accent: false },
     { label: '평균 찍음 비율', value: `${avgGuessRate.toFixed(1)}%`,      accent: false },
@@ -611,7 +613,7 @@ export default function ClassAnalysisPage({
                           <span className="font-medium">{s.student.student_name}</span>
                         </td>
                         <td style={{ ...tdStyle(i), fontWeight: 700, color: 'var(--accent)', textAlign: 'right' }}>
-                          {s.totalScore.toFixed(1)}
+                          {formatScoreValue(s.totalScore)}
                           <span className="text-xs font-normal opacity-50">/{s.totalPossible}</span>
                         </td>
                         <td style={{ ...tdStyle(i), color: '#16a34a', textAlign: 'center', fontWeight: 600 }}>{s.correctCount}</td>
@@ -681,7 +683,7 @@ export default function ClassAnalysisPage({
                             </span>
                           </td>
                           <td style={{ ...tdStyle(i), background: rowBg, textAlign: 'center', fontWeight: 600 }}>{s.q.answer ?? '–'}</td>
-                          <td style={{ ...tdStyle(i), background: rowBg, textAlign: 'center' }}>{s.q.score}점</td>
+                          <td style={{ ...tdStyle(i), background: rowBg, textAlign: 'center' }}>{formatScoreValue(s.q.score)}점</td>
                           <td style={{ ...tdStyle(i), background: rowBg, textAlign: 'center', color: '#16a34a', fontWeight: 600 }}>{s.correctCount}</td>
                           <td style={{ ...tdStyle(i), background: rowBg, textAlign: 'center', color: '#dc2626', fontWeight: 600 }}>{s.wrongCount}</td>
                           <td style={{ ...tdStyle(i), background: rowBg, textAlign: 'center', color: '#94a3b8' }}>{s.blankCount}</td>

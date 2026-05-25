@@ -8,6 +8,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { assignTestsToClass, fetchTestsForClass } from '@/lib/class-tests';
 import Button from '@/components/ui/Button';
+import { getSubjectDisplayName } from '@/lib/report-utils';
 
 type ClassInfo = {
   id: number;
@@ -77,7 +78,8 @@ export default function AssignTestsPage({
 
       const items: TestItem[] = (testsRes.data ?? []).map((t) => {
         const sub = t.subjects as { name: string } | { name: string }[] | null;
-        const subject_name = Array.isArray(sub) ? (sub[0]?.name ?? null) : (sub?.name ?? null);
+        const rawSubjectName = Array.isArray(sub) ? (sub[0]?.name ?? null) : (sub?.name ?? null);
+        const subject_name = getSubjectDisplayName(rawSubjectName);
         return {
           id: t.id,
           title: t.title,

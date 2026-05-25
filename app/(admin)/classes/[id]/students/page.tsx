@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { formatDate } from '@/lib/utils';
 import Modal from '@/components/ui/Modal';
+import { getSubjectDisplayName } from '@/lib/report-utils';
 
 // ─────────────────────────────────────────────
 // 타입 정의
@@ -250,7 +251,7 @@ export default function StudentsPage({
         {[
           { label: '반명',    value: classLabel },
           { label: '테스트', value: test?.title ?? '–' },
-          { label: '과목',   value: test?.subjects?.name ?? '–' },
+          { label: '과목',   value: getSubjectDisplayName(test?.subjects?.name) ?? '–' },
           { label: '학생 수', value: `${students.length}명` },
         ].map((item) => (
           <div key={item.label} className="flex items-center gap-2 text-sm">

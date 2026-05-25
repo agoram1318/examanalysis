@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { fetchTestsForClass } from '@/lib/class-tests';
-import { pickUnitName, formatReportDate, type GroupStat } from '@/lib/report-utils';
+import { pickUnitName, formatReportDate, getSubjectDisplayName, scoreOrFallback, formatScoreValue, type GroupStat } from '@/lib/report-utils';
 import ReportPage from '@/components/reports/ReportPage';
 import ReportHeader from '@/components/reports/ReportHeader';
 import ReportSection from '@/components/reports/ReportSection';
@@ -116,7 +116,7 @@ export default function ClassPrintPage({
       setMeta([
         { label: '테스트명', value: testRaw.title },
         { label: '학년', value: testRaw.grade || '–' },
-        { label: '과목', value: pickUnitName(testRaw.subjects) || '–' },
+        { label: '과목', value: getSubjectDisplayName(pickUnitName(testRaw.subjects)) || '–' },
         { label: '강사명', value: classData.teacher_name || '–' },
         { label: '학원명', value: classData.academy_name || '–' },
         { label: '반명', value: classData.class_name || '–' },
@@ -135,11 +135,12 @@ export default function ClassPrintPage({
       const studentsData = studentsRes.data ?? [];
       setStudents(studentsData);
 
+      const questionCount = questionsRes.data?.length ?? 0;
       const qs: QuestionRow[] = (questionsRes.data ?? []).map((q) => ({
         id: q.id,
         question_number: q.question_number,
         answer: q.answer,
-        score: Number(q.score),
+        score: scoreOrFallback(q.score, questionCount),
         difficulty: q.difficulty,
         question_comment: q.question_comment ?? null,
         major_unit_name: pickUnitName(q.units_major),
@@ -276,9 +277,9 @@ export default function ClassPrintPage({
             <ReportSummaryGrid
               cards={[
                 { label: '응시 인원', value: `${students.length}명` },
-                { label: '평균 점수', value: `${avgScore.toFixed(1)}점`, accent: true },
-                { label: '최고점', value: `${scores.length ? Math.max(...scores).toFixed(1) : 0}점` },
-                { label: '최저점', value: `${scores.length ? Math.min(...scores).toFixed(1) : 0}점` },
+                { label: '평균 점수', value: `${formatScoreValue(avgScore)}점`, accent: true },
+                { label: '최고점', value: `${formatScoreValue(scores.length ? Math.max(...scores) : 0)}점` },
+                { label: '최저점', value: `${formatScoreValue(scores.length ? Math.min(...scores) : 0)}점` },
                 { label: '평균 정답률', value: `${avgRate.toFixed(1)}%`, accent: true },
                 { label: '총 찍음', value: `${totalGuessed}개` },
                 { label: '평균 찍음 비율', value: `${avgGuessRate.toFixed(1)}%` },
@@ -337,7 +338,7 @@ export default function ClassPrintPage({
                   <ReportTr key={s.student.id} stripedIndex={i}>
                     <ReportTd>{s.student.student_code || '–'}</ReportTd>
                     <ReportTd>{s.student.student_name}</ReportTd>
-                    <ReportTd align="center" className="font-semibold text-orange-600">{s.totalScore.toFixed(1)}</ReportTd>
+                    <ReportTd align="center" className="font-semibold text-orange-600">{formatScoreValue(s.totalScore)}</ReportTd>
                     <ReportTd align="center">{s.correctCount}</ReportTd>
                     <ReportTd align="center">{s.wrongCount}</ReportTd>
                     <ReportTd align="center">{s.blankCount}</ReportTd>
@@ -358,7 +359,7 @@ export default function ClassPrintPage({
                 <ReportTr key={s.q.id} stripedIndex={i} highlight={s.correctRate < 40 ? 'danger' : undefined}>
                   <ReportTd align="center">{s.q.question_number}</ReportTd>
                   <ReportTd align="center">{s.q.answer ?? '–'}</ReportTd>
-                  <ReportTd align="center">{s.q.score}</ReportTd>
+                  <ReportTd align="center">{formatScoreValue(s.q.score)}</ReportTd>
                   <ReportTd align="center">{s.correctCount}</ReportTd>
                   <ReportTd align="center">{s.wrongCount}</ReportTd>
                   <ReportTd align="center">{s.blankCount}</ReportTd>
