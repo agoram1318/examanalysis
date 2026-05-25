@@ -30,6 +30,10 @@ type QA = {
   major_unit_name: string | null;
   middle_unit_name: string | null;
   small_unit_name: string | null;
+  subject_order: number;
+  major_order: number;
+  middle_order: number;
+  small_order: number;
   ans: {
     selected_answer: string | null;
     is_guessed: boolean;
@@ -37,6 +41,19 @@ type QA = {
     is_correct: boolean;
     earned_score: number;
   } | null;
+};
+
+type CohortAnswerRow = {
+  student_id: number;
+  question_id: number;
+  is_correct: boolean;
+  earned_score: number;
+};
+
+type QuestionRate = {
+  correctRate: number | null;
+  correctCount: number;
+  participantCount: number;
 };
 
 type CauseStat = {
@@ -74,6 +91,24 @@ function correctRateText(stat: GroupStat | null): string {
 
 function cleanStatName(name: string): string {
   return name.replace(/^▶\s*/, '');
+}
+
+function difficultySummary(avg: number | null): string {
+  if (avg === null) return '난이도 미설정';
+  if (avg <= 2) return '기본 확인 중심';
+  if (avg <= 4) return '기본 적용 중심';
+  if (avg <= 6) return '중상 난도 중심';
+  return '고난도/킬러 중심';
+}
+
+function curriculumCompare(a: QA, b: QA): number {
+  return (
+    a.subject_order - b.subject_order ||
+    a.major_order - b.major_order ||
+    a.middle_order - b.middle_order ||
+    a.small_order - b.small_order ||
+    a.question_number - b.question_number
+  );
 }
 
 function scoreTone(rate: number): { color: string; bg: string; text: string } {
@@ -520,6 +555,114 @@ function AchievementCards({
   );
 }
 
+function ScoreCompareBar({
+  studentScore,
+  totalPossible,
+  cohortAverage,
+}: {
+  studentScore: number;
+  totalPossible: number;
+  cohortAverage: number | null;
+}) {
+  const studentRate = totalPossible > 0 ? (studentScore / totalPossible) * 100 : 0;
+  const averageRate = cohortAverage !== null && totalPossible > 0 ? (cohortAverage / totalPossible) * 100 : 0;
+
+  return (
+    <div className="rounded-lg border bg-white px-3 py-3" style={{ borderColor: 'var(--border)' }}>
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-bold text-stone-950">내 점수 vs 전체 평균</p>
+        <p className="text-[11px] text-stone-500">{cohortAverage === null ? '응시 데이터 부족' : `전체 평균 ${cohortAverage.toFixed(1)}점`}</p>
+      </div>
+      <div className="space-y-2">
+        {[
+          ['내 점수', studentScore, studentRate, 'var(--accent)'],
+          ['전체 평균', cohortAverage, averageRate, '#64748b'],
+        ].map(([label, value, rate, color]) => (
+          <div key={String(label)}>
+            <div className="mb-1 flex justify-between text-[11px] font-semibold text-stone-600">
+              <span>{label}</span>
+              <span>{typeof value === 'number' ? `${value.toFixed(label === '내 점수' ? 0 : 1)}점` : '산출 전'}</span>
+            </div>
+            <div className="h-2.5 rounded-full bg-stone-200">
+              <div className="h-2.5 rounded-full" style={{ width: `${Math.min(100, Number(rate))}%`, background: String(color) }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function QuestionTimeline({ qaRows }: { qaRows: QA[] }) {
+  if (qaRows.length === 0) return <p className="report-empty">문항 정보가 없습니다.</p>;
+
+  return (
+    <div className="rounded-lg border bg-white p-3" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex flex-wrap gap-1.5">
+        {qaRows.map((qa) => {
+          const ans = qa.ans;
+          const hasAnswer = ans && !ans.is_blank && ans.selected_answer;
+          const bg = !hasAnswer ? '#e2e8f0' : ans.is_correct ? '#dcfce7' : '#fee2e2';
+          const color = !hasAnswer ? '#64748b' : ans.is_correct ? '#15803d' : '#dc2626';
+          return (
+            <div key={qa.id} className="relative flex h-7 w-7 items-center justify-center rounded border text-[10px] font-bold" style={{ background: bg, color, borderColor: '#d6d3d1' }}>
+              {qa.question_number}
+              {ans?.is_guessed && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border border-white bg-orange-500" />}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function QuestionAnalysisGraph({
+  qaRows,
+  questionRates,
+}: {
+  qaRows: QA[];
+  questionRates: Map<number, QuestionRate>;
+}) {
+  if (qaRows.length === 0) return <p className="report-empty">문항 정보가 없습니다.</p>;
+
+  return (
+    <div className="rounded-lg border bg-white p-3" style={{ borderColor: 'var(--border)' }}>
+      <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(86px, 1fr))' }}>
+        {qaRows.map((qa) => {
+          const rateInfo = questionRates.get(qa.id);
+          const rate = rateInfo?.correctRate ?? null;
+          const ans = qa.ans;
+          const hasAnswer = ans && !ans.is_blank && ans.selected_answer;
+          const statusLabel = !hasAnswer ? '미응답' : ans.is_correct ? '정답' : '오답';
+          const statusColor = !hasAnswer ? '#64748b' : ans.is_correct ? '#16a34a' : '#dc2626';
+          const highDifficulty = (qa.difficulty ?? 0) >= 6;
+          const barHeight = rate === null ? 12 : Math.max(12, Math.round(rate * 0.75));
+
+          return (
+            <div key={qa.id} className="break-inside-avoid rounded border bg-stone-50 px-2 py-2" style={{ borderColor: highDifficulty ? '#fb923c' : 'var(--border)' }}>
+              <div className="mb-1 flex items-start justify-between gap-1">
+                <div>
+                  <p className="text-[11px] font-bold text-stone-950">{qa.question_number}번</p>
+                  <p className="text-[9px] text-stone-500">난도 {qa.difficulty ?? '–'}</p>
+                </div>
+                <span className="rounded px-1 py-0.5 text-[9px] font-semibold" style={{ background: `${statusColor}18`, color: statusColor }}>
+                  {statusLabel}
+                </span>
+              </div>
+              <div className="flex h-16 items-end justify-center rounded bg-white px-1 pb-1">
+                <div className="relative w-full rounded-t" style={{ height: `${barHeight}%`, background: rate === null ? '#cbd5e1' : highDifficulty ? '#f97316' : '#2563eb' }}>
+                  {ans?.is_guessed && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full border border-white bg-orange-500" />}
+                </div>
+              </div>
+              <p className="mt-1 text-center text-[10px] font-bold text-stone-900">{rate === null ? '산출 전' : `${rate.toFixed(0)}%`}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function StudentPrintPage({
   params,
 }: {
@@ -536,6 +679,7 @@ export default function StudentPrintPage({
   const [classId, setClassId] = useState(0);
   const [meta, setMeta] = useState<{ label: string; value: string }[]>([]);
   const [qaRows, setQaRows] = useState<QA[]>([]);
+  const [cohortAnswers, setCohortAnswers] = useState<CohortAnswerRow[]>([]);
 
   useEffect(() => {
     if (isNaN(studentId) || isNaN(testId)) {
@@ -576,7 +720,7 @@ export default function StudentPrintPage({
 
       const { data: testRaw } = await supabase
         .from('tests')
-        .select('id, title, grade, subjects(name)')
+        .select('id, title, grade, exam_range_text, subjects(name)')
         .eq('id', testId)
         .single();
 
@@ -593,6 +737,7 @@ export default function StudentPrintPage({
         { label: '테스트명', value: testRaw.title },
         { label: '학년', value: testRaw.grade || '–' },
         { label: '과목', value: subjectName || '–' },
+        { label: '테스트 범위', value: testRaw.exam_range_text?.trim() || '범위 미입력' },
         { label: '강사명', value: classData?.teacher_name || '–' },
         { label: '학원명', value: classData?.academy_name || '–' },
         { label: '반명', value: classData?.class_name || '–' },
@@ -602,12 +747,19 @@ export default function StudentPrintPage({
         .from('questions')
         .select(`
           id, question_number, answer, score, difficulty, question_comment,
-          units_major:major_unit_id(name),
-          units_middle:middle_unit_id(name),
-          units_small:small_unit_id(name)
+          subjects:subject_id(order_index),
+          units_major:major_unit_id(name, order_index),
+          units_middle:middle_unit_id(name, order_index),
+          units_small:small_unit_id(name, order_index)
         `)
         .eq('test_id', testId)
         .order('question_number');
+
+      function pickOrder(raw: unknown): number {
+        const u = raw as ({ order_index?: number | null } | { order_index?: number | null }[] | null);
+        const value = Array.isArray(u) ? u[0]?.order_index : u?.order_index;
+        return typeof value === 'number' ? value : 9999;
+      }
 
       const questions = (questionsRaw ?? []).map((q) => ({
         id: q.id,
@@ -619,6 +771,10 @@ export default function StudentPrintPage({
         major_unit_name: pickUnitName(q.units_major),
         middle_unit_name: pickUnitName(q.units_middle),
         small_unit_name: pickUnitName(q.units_small),
+        subject_order: pickOrder(q.subjects),
+        major_order: pickOrder(q.units_major),
+        middle_order: pickOrder(q.units_middle),
+        small_order: pickOrder(q.units_small),
       }));
 
       if (!questions.length) {
@@ -631,6 +787,11 @@ export default function StudentPrintPage({
         .from('student_answers')
         .select('question_id, selected_answer, is_guessed, is_blank, is_correct, earned_score')
         .eq('student_id', studentId)
+        .in('question_id', questions.map((q) => q.id));
+
+      const { data: cohortRaw } = await supabase
+        .from('student_answers')
+        .select('student_id, question_id, is_correct, earned_score')
         .in('question_id', questions.map((q) => q.id));
 
       const answerMap = new Map(
@@ -647,6 +808,12 @@ export default function StudentPrintPage({
       );
 
       setQaRows(questions.map((q) => ({ ...q, ans: answerMap.get(q.id) ?? null })));
+      setCohortAnswers((cohortRaw ?? []).map((a) => ({
+        student_id: a.student_id,
+        question_id: a.question_id,
+        is_correct: a.is_correct,
+        earned_score: Number(a.earned_score),
+      })));
       setLoading(false);
     }
 
@@ -670,9 +837,47 @@ export default function StudentPrintPage({
           qaRows.filter((qa) => qa.ans && !qa.ans.is_blank && qa.ans.selected_answer).length) *
         100
       : 0;
+  const difficultyValues = qaRows.map((qa) => qa.difficulty).filter((d): d is number => typeof d === 'number');
+  const averageDifficulty = difficultyValues.length > 0
+    ? difficultyValues.reduce((sum, d) => sum + d, 0) / difficultyValues.length
+    : null;
+  const headerMeta = [
+    ...meta,
+    {
+      label: '테스트 난이도',
+      value: averageDifficulty === null
+        ? '난이도 미설정'
+        : `평균 난이도 ${averageDifficulty.toFixed(1)} / 8 · ${difficultySummary(averageDifficulty)}`,
+    },
+  ];
 
-  const majorStats = groupStats(qaRows, (qa) => qa.major_unit_name || '미분류');
-  const middleStats = groupStats(qaRows, (qa) =>
+  const questionIds = qaRows.map((qa) => qa.id);
+  const answersByStudent = new Map<number, CohortAnswerRow[]>();
+  cohortAnswers.forEach((answer) => {
+    if (!answersByStudent.has(answer.student_id)) answersByStudent.set(answer.student_id, []);
+    answersByStudent.get(answer.student_id)!.push(answer);
+  });
+  const completedStudentScores = [...answersByStudent.values()]
+    .filter((answers) => questionIds.length > 0 && questionIds.every((id) => answers.some((a) => a.question_id === id)))
+    .map((answers) => answers.reduce((sum, answer) => sum + answer.earned_score, 0));
+  const cohortAverage = completedStudentScores.length > 1
+    ? completedStudentScores.reduce((sum, score) => sum + score, 0) / completedStudentScores.length
+    : null;
+  const questionRates = new Map<number, QuestionRate>();
+  qaRows.forEach((qa) => {
+    const submitted = [...answersByStudent.values()].filter((answers) => answers.some((a) => a.question_id === qa.id));
+    const participantCount = submitted.length;
+    const correctCountForQuestion = submitted.filter((answers) => answers.find((a) => a.question_id === qa.id)?.is_correct).length;
+    questionRates.set(qa.id, {
+      correctRate: participantCount > 0 ? (correctCountForQuestion / participantCount) * 100 : null,
+      correctCount: correctCountForQuestion,
+      participantCount,
+    });
+  });
+
+  const curriculumRows = [...qaRows].sort(curriculumCompare);
+  const majorStats = groupStats(curriculumRows, (qa) => qa.major_unit_name || '미분류');
+  const middleStats = groupStats(curriculumRows, (qa) =>
     qa.middle_unit_name ? `${qa.major_unit_name ?? ''} > ${qa.middle_unit_name}` : '미분류'
   );
   const diffStats = [...groupStats(qaRows, (qa) => difficultyGroup(qa.difficulty))].sort(
@@ -685,7 +890,7 @@ export default function StudentPrintPage({
   const causeStats = buildCauseStats(qaRows);
 
   const comment = qaRows.length > 0 ? generateComment(qaRows, totalScore, totalPossible) : '';
-  const questionCommentPoints = qaRows.filter((qa) => getQuestionStatus(qa));
+  const questionCommentPoints = curriculumRows.filter((qa) => getQuestionStatus(qa));
   const today = formatReportDate();
   const backHref = `/students/${studentId}/tests/${testId}/report`;
 
@@ -716,7 +921,7 @@ export default function StudentPrintPage({
           subtitle={meta.find((m) => m.label === '테스트명')?.value}
           highlight={studentName}
           highlightSub={studentCode ?? undefined}
-          meta={meta}
+          meta={headerMeta}
           generatedAt={today}
         />
         <div className="report-page-body">
@@ -725,7 +930,7 @@ export default function StudentPrintPage({
               <AccuracyGauge rate={scoreRate} correct={correctCount} total={qaRows.length} />
               <div className="grid grid-cols-2 gap-2">
                 <MiniSummaryCard label="총점" value={`${totalScore} / ${totalPossible}점`} sub="획득 점수" accent />
-                <MiniSummaryCard label="정답률" value={`${scoreRate.toFixed(1)}%`} sub={`${correctCount}/${qaRows.length}문항`} accent />
+                <MiniSummaryCard label="전체 응시자 평균점수" value={cohortAverage === null ? '산출 전' : `${cohortAverage.toFixed(1)}점`} sub={cohortAverage === null ? '응시 데이터 부족' : `완료 ${completedStudentScores.length}명 기준`} />
                 <MiniSummaryCard label="취약 단원" value={weakestUnit ? cleanStatName(weakestUnit.name) : '–'} sub={correctRateText(weakestUnit)} />
                 <MiniSummaryCard label="보완 난이도" value={weakestDiff ? cleanStatName(weakestDiff.name) : '–'} sub={correctRateText(weakestDiff)} />
               </div>
@@ -747,23 +952,9 @@ export default function StudentPrintPage({
             </div>
           </ReportSection>
 
-          <ReportSection title="오답 원인 분포">
-            <CauseDistribution causes={causeStats} />
+          <ReportSection title="점수 비교">
+            <ScoreCompareBar studentScore={totalScore} totalPossible={totalPossible} cohortAverage={cohortAverage} />
           </ReportSection>
-
-          <ReportSection title="핵심 진단">
-            <ul className="space-y-1.5 rounded-lg border bg-stone-50 px-4 py-3" style={{ borderColor: 'var(--border)' }}>
-              {coreDiagnoses.map((line) => (
-                <li key={line} className="text-sm leading-relaxed text-stone-900">• {line}</li>
-              ))}
-            </ul>
-          </ReportSection>
-
-          {comment && (
-            <ReportSection title="종합 학습 코멘트">
-              <ReportComment>{comment}</ReportComment>
-            </ReportSection>
-          )}
 
           <ReportSection title="단원별 성취도">
             {majorStats.length === 0 ? (
@@ -784,15 +975,15 @@ export default function StudentPrintPage({
             )}
           </ReportSection>
 
-          <ReportSection title="추천 학습 처방">
-            <ul className="space-y-1.5 rounded-lg border bg-slate-50 px-4 py-3" style={{ borderColor: 'var(--border)' }}>
-              {prescriptions.map((line) => (
-                <li key={line} className="text-sm leading-relaxed text-stone-900">• {line}</li>
-              ))}
-            </ul>
+          <ReportSection title="문항별 O/X 타임라인">
+            <QuestionTimeline qaRows={qaRows} />
           </ReportSection>
 
-          <ReportSection title="문항별 결과" pageBreakBefore={qaRows.length > 10}>
+          <ReportSection title="문항별 분석 그래프" pageBreakBefore={qaRows.length > 10}>
+            <QuestionAnalysisGraph qaRows={qaRows} questionRates={questionRates} />
+          </ReportSection>
+
+          <ReportSection title="문항별 결과">
             {qaRows.length === 0 ? (
               <p className="report-empty">문항이 없습니다.</p>
             ) : (
@@ -843,6 +1034,32 @@ export default function StudentPrintPage({
               </ul>
             </ReportSection>
           )}
+
+          <ReportSection title="오답 원인 분포">
+            <CauseDistribution causes={causeStats} />
+          </ReportSection>
+
+          <ReportSection title="핵심 진단" className="report-interpretation-block">
+            <ul className="space-y-1.5 rounded-lg border bg-stone-50 px-4 py-3" style={{ borderColor: 'var(--border)' }}>
+              {coreDiagnoses.map((line) => (
+                <li key={line} className="text-sm leading-relaxed text-stone-900">• {line}</li>
+              ))}
+            </ul>
+          </ReportSection>
+
+          {comment && (
+            <ReportSection title="종합 학습 코멘트" className="report-interpretation-block">
+              <ReportComment>{comment}</ReportComment>
+            </ReportSection>
+          )}
+
+          <ReportSection title="추천 학습 처방" className="report-interpretation-block">
+            <ul className="space-y-1.5 rounded-lg border bg-slate-50 px-4 py-3" style={{ borderColor: 'var(--border)' }}>
+              {prescriptions.map((line) => (
+                <li key={line} className="text-sm leading-relaxed text-stone-900">• {line}</li>
+              ))}
+            </ul>
+          </ReportSection>
         </div>
       </ReportPage>
     </>

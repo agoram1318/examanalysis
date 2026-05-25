@@ -309,6 +309,12 @@ body {
   gap: 0.75rem;
 }
 
+.report-visual-card,
+.report-interpretation-block {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
 @media (max-width: 720px) {
   .report-two-col { grid-template-columns: 1fr; }
 }
@@ -374,6 +380,7 @@ body {
   .report-section,
   .report-summary-card,
   .report-visual-card,
+  .report-interpretation-block,
   .report-comment,
   .report-top5-item {
     break-inside: avoid !important;
