@@ -6,9 +6,8 @@ import {
   ArrowLeft, AlertCircle, Loader2, ChevronRight, FileBarChart, ClipboardList,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { fetchTestsForClass, type TestSummary } from '@/lib/class-tests';
+import { fetchSubjectNamesByTest, fetchTestsForClass, type TestSummary } from '@/lib/class-tests';
 import Button from '@/components/ui/Button';
-import { getSubjectDisplayName } from '@/lib/report-utils';
 
 type StudentInfo = {
   id: number;
@@ -49,7 +48,7 @@ export default function StudentTestPicker({ studentId }: { studentId: number }) 
 
       const { data: answerRows } = await supabase
         .from('student_answers')
-        .select('question_id, questions(test_id, tests(id, title, grade, total_questions, subjects(name)))')
+        .select('question_id, questions(test_id, tests(id, title, grade, total_questions))')
         .eq('student_id', studentId);
 
       for (const row of answerRows ?? []) {
@@ -60,24 +59,24 @@ export default function StudentTestPicker({ studentId }: { studentId: number }) 
             title: string;
             grade: string | null;
             total_questions: number;
-            subjects: { name: string } | { name: string }[] | null;
           } | null;
         } | null;
         const t = q?.tests;
         if (!t || byId.has(t.id)) continue;
-        const sub = t.subjects;
-        const rawSubjectName = Array.isArray(sub) ? (sub[0]?.name ?? null) : (sub?.name ?? null);
-        const subject_name = getSubjectDisplayName(rawSubjectName);
         byId.set(t.id, {
           id: t.id,
           title: t.title,
           grade: t.grade,
           total_questions: t.total_questions,
-          subject_name,
+          subject_name: null,
         });
       }
 
-      setTests([...byId.values()]);
+      const subjectNames = await fetchSubjectNamesByTest([...byId.keys()]);
+      setTests([...byId.values()].map((test) => ({
+        ...test,
+        subject_name: subjectNames.get(test.id) ?? test.subject_name ?? '문항 입력 전',
+      })));
       setLoading(false);
     }
     load();

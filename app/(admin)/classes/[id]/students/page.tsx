@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { formatDate } from '@/lib/utils';
 import Modal from '@/components/ui/Modal';
-import { getSubjectDisplayName } from '@/lib/report-utils';
+import { fetchSubjectNamesByTest } from '@/lib/class-tests';
 
 // ─────────────────────────────────────────────
 // 타입 정의
@@ -22,7 +22,7 @@ type ClassRow = {
   tests: {
     title: string;
     grade: string | null;
-    subjects: { name: string } | null;
+    subject_name: string;
   } | null;
 };
 
@@ -80,7 +80,7 @@ export default function StudentsPage({
       const { data, error } = await supabase
         .from('classes')
         .select(
-          'id, class_name, teacher_name, academy_name, test_id, tests(title, grade, subjects(name))'
+          'id, class_name, teacher_name, academy_name, test_id, tests(title, grade)'
         )
         .eq('id', classId)
         .single();
@@ -91,7 +91,12 @@ export default function StudentsPage({
         return;
       }
 
-      setCls(data as unknown as ClassRow);
+      const row = data as unknown as ClassRow;
+      if (row.test_id && row.tests) {
+        const subjectNames = await fetchSubjectNamesByTest([row.test_id]);
+        row.tests.subject_name = subjectNames.get(row.test_id) ?? '문항 입력 전';
+      }
+      setCls(row);
       await reloadStudents();
       setLoading(false);
     }
@@ -251,7 +256,7 @@ export default function StudentsPage({
         {[
           { label: '반명',    value: classLabel },
           { label: '테스트', value: test?.title ?? '–' },
-          { label: '과목',   value: getSubjectDisplayName(test?.subjects?.name) ?? '–' },
+          { label: '과목',   value: test?.subject_name ?? '–' },
           { label: '학생 수', value: `${students.length}명` },
         ].map((item) => (
           <div key={item.label} className="flex items-center gap-2 text-sm">

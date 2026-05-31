@@ -8,7 +8,7 @@ import Badge from '@/components/ui/Badge';
 import { Plus, ClipboardList, Edit2, Users, Loader2, ChevronRight, BarChart3, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/utils';
-import { getSubjectDisplayName } from '@/lib/report-utils';
+import { formatSubjectList, getQuestionSubjectName } from '@/lib/report-utils';
 import Modal from '@/components/ui/Modal';
 
 type TestRow = {
@@ -17,7 +17,7 @@ type TestRow = {
   grade: string | null;
   total_questions: number;
   created_at: string;
-  subjects: { name: string } | null;
+  subject_names: string[];
 };
 
 export default function TestsPage() {
@@ -31,9 +31,28 @@ export default function TestsPage() {
   const loadTests = useCallback(async () => {
     const { data } = await supabase
       .from('tests')
-      .select('id, title, grade, total_questions, created_at, subjects(name)')
+      .select('id, title, grade, total_questions, created_at')
       .order('created_at', { ascending: false });
-    setTests((data ?? []) as unknown as TestRow[]);
+    const rows = (data ?? []) as unknown as Omit<TestRow, 'subject_names'>[];
+    const testIds = rows.map((test) => test.id);
+    const { data: questionSubjects } = testIds.length > 0
+      ? await supabase
+          .from('questions')
+          .select('test_id, subjects:subject_id(name)')
+          .in('test_id', testIds)
+      : { data: [] };
+    const subjectMap = new Map<number, string[]>();
+    (questionSubjects ?? []).forEach((row) => {
+      const testId = Number(row.test_id);
+      const list = subjectMap.get(testId) ?? [];
+      const name = getQuestionSubjectName(row.subjects);
+      if (name) list.push(name);
+      subjectMap.set(testId, list);
+    });
+    setTests(rows.map((test) => ({
+      ...test,
+      subject_names: subjectMap.get(test.id) ?? [],
+    })));
     setLoading(false);
   }, []);
 
@@ -167,7 +186,7 @@ export default function TestsPage() {
       ) : (
         <div className="space-y-3">
           {tests.map((test) => {
-            const subjectName = getSubjectDisplayName(test.subjects?.name);
+            const subjectName = formatSubjectList(test.subject_names);
             const meta = [test.grade, subjectName].filter(Boolean).join(' · ');
             return (
               <div

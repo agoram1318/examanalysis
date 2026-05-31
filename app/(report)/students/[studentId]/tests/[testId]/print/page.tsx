@@ -9,8 +9,9 @@ import {
   pickUnitName,
   difficultyGroup,
   DIFF_ORDER,
+  formatSubjectList,
   formatReportDate,
-  getSubjectDisplayName,
+  getQuestionSubjectName,
   scoreOrFallback,
   formatScoreValue,
   type GroupStat,
@@ -31,6 +32,7 @@ type QA = {
   score: number;
   difficulty: number | null;
   question_comment: string | null;
+  subject_name: string | null;
   major_unit_name: string | null;
   middle_unit_name: string | null;
   small_unit_name: string | null;
@@ -728,7 +730,7 @@ export default function StudentPrintPage({
 
       const { data: testRaw } = await supabase
         .from('tests')
-        .select('id, title, grade, exam_range_text, subjects(name)')
+        .select('id, title, grade, exam_range_text')
         .eq('id', testId)
         .single();
 
@@ -738,24 +740,11 @@ export default function StudentPrintPage({
         return;
       }
 
-      const subjectName = getSubjectDisplayName(pickUnitName(testRaw.subjects));
-      setMeta([
-        { label: '학생명', value: studentData.student_name },
-        { label: '학생 코드', value: studentData.student_code || '–' },
-        { label: '테스트명', value: testRaw.title },
-        { label: '학년', value: testRaw.grade || '–' },
-        { label: '과목', value: subjectName || '–' },
-        { label: '테스트 범위', value: testRaw.exam_range_text?.trim() || '범위 미입력' },
-        { label: '강사명', value: classData?.teacher_name || '–' },
-        { label: '학원명', value: classData?.academy_name || '–' },
-        { label: '반명', value: classData?.class_name || '–' },
-      ]);
-
       const { data: questionsRaw } = await supabase
         .from('questions')
         .select(`
           id, question_number, question_format, answer, score, difficulty, question_comment,
-          subjects:subject_id(order_index),
+          subjects:subject_id(name, order_index),
           units_major:major_unit_id(name, order_index),
           units_middle:middle_unit_id(name, order_index),
           units_small:small_unit_id(name, order_index)
@@ -778,6 +767,7 @@ export default function StudentPrintPage({
         score: scoreOrFallback(q.score, questionCount),
         difficulty: q.difficulty,
         question_comment: q.question_comment ?? null,
+        subject_name: getQuestionSubjectName(q.subjects),
         major_unit_name: pickUnitName(q.units_major),
         middle_unit_name: pickUnitName(q.units_middle),
         small_unit_name: pickUnitName(q.units_small),
@@ -792,6 +782,18 @@ export default function StudentPrintPage({
         setLoading(false);
         return;
       }
+
+      setMeta([
+        { label: '학생명', value: studentData.student_name },
+        { label: '학생 코드', value: studentData.student_code || '–' },
+        { label: '테스트명', value: testRaw.title },
+        { label: '학년', value: testRaw.grade || '–' },
+        { label: '과목', value: formatSubjectList(questions.map((q) => q.subject_name)) },
+        { label: '테스트 범위', value: testRaw.exam_range_text?.trim() || '범위 미입력' },
+        { label: '강사명', value: classData?.teacher_name || '–' },
+        { label: '학원명', value: classData?.academy_name || '–' },
+        { label: '반명', value: classData?.class_name || '–' },
+      ]);
 
       const { data: answersRaw } = await supabase
         .from('student_answers')
@@ -886,9 +888,14 @@ export default function StudentPrintPage({
   });
 
   const curriculumRows = [...qaRows].sort(curriculumCompare);
-  const majorStats = groupStats(curriculumRows, (qa) => qa.major_unit_name || '미분류');
+  const subjectStats = groupStats(curriculumRows, (qa) => qa.subject_name || '미분류');
+  const majorStats = groupStats(curriculumRows, (qa) =>
+    `${qa.subject_name || '미분류'} > ${qa.major_unit_name || '미분류'}`
+  );
   const middleStats = groupStats(curriculumRows, (qa) =>
-    qa.middle_unit_name ? `${qa.major_unit_name ?? ''} > ${qa.middle_unit_name}` : '미분류'
+    qa.middle_unit_name
+      ? `${qa.subject_name || '미분류'} > ${qa.major_unit_name || '미분류'} > ${qa.middle_unit_name}`
+      : `${qa.subject_name || '미분류'} > ${qa.major_unit_name || '미분류'} > 미분류`
   );
   const diffStats = [...groupStats(qaRows, (qa) => difficultyGroup(qa.difficulty))].sort(
     (a, b) => DIFF_ORDER.indexOf(a.name) - DIFF_ORDER.indexOf(b.name)
@@ -971,6 +978,7 @@ export default function StudentPrintPage({
               <p className="report-empty">단원 정보가 없습니다.</p>
             ) : (
               <div className="space-y-3">
+                <StatBarList stats={subjectStats} emptyText="과목 정보가 없습니다." />
                 <AchievementCards stats={majorStats} emptyText="단원 정보가 없습니다." />
                 {middleStats.length > 0 && <StatBarList stats={middleStats} emptyText="중단원 정보가 없습니다." />}
               </div>

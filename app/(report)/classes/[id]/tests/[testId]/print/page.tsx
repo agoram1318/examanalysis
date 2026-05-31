@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { fetchTestsForClass } from '@/lib/class-tests';
-import { pickUnitName, formatReportDate, getSubjectDisplayName, scoreOrFallback, formatScoreValue, type GroupStat } from '@/lib/report-utils';
+import { pickUnitName, formatReportDate, formatSubjectList, getQuestionSubjectName, scoreOrFallback, formatScoreValue, type GroupStat } from '@/lib/report-utils';
 import ReportPage from '@/components/reports/ReportPage';
 import ReportHeader from '@/components/reports/ReportHeader';
 import ReportSection from '@/components/reports/ReportSection';
@@ -23,6 +23,7 @@ type QuestionRow = {
   score: number;
   difficulty: number | null;
   question_comment: string | null;
+  subject_name: string | null;
   major_unit_name: string | null;
   middle_unit_name: string | null;
   small_unit_name: string | null;
@@ -103,7 +104,7 @@ export default function ClassPrintPage({
 
       const { data: testRaw } = await supabase
         .from('tests')
-        .select('id, title, grade, subjects(name)')
+        .select('id, title, grade')
         .eq('id', testId)
         .single();
 
@@ -113,19 +114,11 @@ export default function ClassPrintPage({
         return;
       }
 
-      setMeta([
-        { label: '테스트명', value: testRaw.title },
-        { label: '학년', value: testRaw.grade || '–' },
-        { label: '과목', value: getSubjectDisplayName(pickUnitName(testRaw.subjects)) || '–' },
-        { label: '강사명', value: classData.teacher_name || '–' },
-        { label: '학원명', value: classData.academy_name || '–' },
-        { label: '반명', value: classData.class_name || '–' },
-      ]);
-
       const [studentsRes, questionsRes] = await Promise.all([
         supabase.from('students').select('id, student_name, student_code').eq('class_id', classId).order('student_code'),
         supabase.from('questions').select(`
           id, question_number, answer, score, difficulty, question_comment,
+          subjects:subject_id(name),
           units_major:major_unit_id(name),
           units_middle:middle_unit_id(name),
           units_small:small_unit_id(name)
@@ -143,11 +136,21 @@ export default function ClassPrintPage({
         score: scoreOrFallback(q.score, questionCount),
         difficulty: q.difficulty,
         question_comment: q.question_comment ?? null,
+        subject_name: getQuestionSubjectName(q.subjects),
         major_unit_name: pickUnitName(q.units_major),
         middle_unit_name: pickUnitName(q.units_middle),
         small_unit_name: pickUnitName(q.units_small),
       }));
       setQuestions(qs);
+
+      setMeta([
+        { label: '테스트명', value: testRaw.title },
+        { label: '학년', value: testRaw.grade || '–' },
+        { label: '과목', value: formatSubjectList(qs.map((q) => q.subject_name)) },
+        { label: '강사명', value: classData.teacher_name || '–' },
+        { label: '학원명', value: classData.academy_name || '–' },
+        { label: '반명', value: classData.class_name || '–' },
+      ]);
 
       if (!studentsData.length || !qs.length) {
         setLoading(false);

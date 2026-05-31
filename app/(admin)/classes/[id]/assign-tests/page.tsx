@@ -6,9 +6,8 @@ import {
   ArrowLeft, Save, AlertCircle, Loader2, ClipboardList, CheckSquare, Square,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { assignTestsToClass, fetchTestsForClass } from '@/lib/class-tests';
+import { assignTestsToClass, fetchSubjectNamesByTest, fetchTestsForClass } from '@/lib/class-tests';
 import Button from '@/components/ui/Button';
-import { getSubjectDisplayName } from '@/lib/report-utils';
 
 type ClassInfo = {
   id: number;
@@ -67,7 +66,7 @@ export default function AssignTestsPage({
       const [testsRes, assigned] = await Promise.all([
         supabase
           .from('tests')
-          .select('id, title, grade, total_questions, subjects(name)')
+          .select('id, title, grade, total_questions')
           .order('created_at', { ascending: false }),
         fetchTestsForClass(classId),
       ]);
@@ -76,18 +75,15 @@ export default function AssignTestsPage({
       setAssignedIds(assignedSet);
       setSelectedIds(new Set(assignedSet));
 
-      const items: TestItem[] = (testsRes.data ?? []).map((t) => {
-        const sub = t.subjects as { name: string } | { name: string }[] | null;
-        const rawSubjectName = Array.isArray(sub) ? (sub[0]?.name ?? null) : (sub?.name ?? null);
-        const subject_name = getSubjectDisplayName(rawSubjectName);
-        return {
-          id: t.id,
-          title: t.title,
-          grade: t.grade,
-          total_questions: t.total_questions,
-          subject_name,
-        };
-      });
+      const rawTests = testsRes.data ?? [];
+      const subjectNames = await fetchSubjectNamesByTest(rawTests.map((t) => t.id));
+      const items: TestItem[] = rawTests.map((t) => ({
+        id: t.id,
+        title: t.title,
+        grade: t.grade,
+        total_questions: t.total_questions,
+        subject_name: subjectNames.get(t.id) ?? '문항 입력 전',
+      }));
       setAllTests(items);
       setLoading(false);
     }

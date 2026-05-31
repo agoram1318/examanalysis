@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabase/client';
 import { fetchClassIdsForTest } from '@/lib/class-tests';
 import Button from '@/components/ui/Button';
 import PrintReportLink from '@/components/reports/PrintReportLink';
-import { formatScoreValue, getSubjectDisplayName, scoreOrFallback } from '@/lib/report-utils';
+import { formatScoreValue, formatSubjectList, getQuestionSubjectName, scoreOrFallback } from '@/lib/report-utils';
 import {
   buildScoreDistribution,
   computeEstimatedGrade,
@@ -33,6 +33,7 @@ type TestRow = {
   grade: string | null;
   subject_name: string | null;
   total_questions: number;
+  exam_range_text: string | null;
 };
 
 type ClassRow = {
@@ -56,6 +57,7 @@ type QuestionRow = {
   score: number;
   difficulty: number | null;
   question_comment: string | null;
+  subject_name: string | null;
   major_unit_name: string | null;
   middle_unit_name: string | null;
   small_unit_name: string | null;
@@ -170,24 +172,25 @@ export default function TestWideAnalysisPage({ params }: { params: Promise<{ id:
     async function load() {
       const { data: testRaw, error: testErr } = await supabase
         .from('tests')
-        .select('id, title, grade, total_questions, subjects(name)')
+        .select('id, title, grade, total_questions, exam_range_text')
         .eq('id', testId)
         .single();
 
       if (testErr || !testRaw) { setNotFound(true); setLoading(false); return; }
 
-      const subjectName = getSubjectDisplayName(pickName(testRaw.subjects));
       setTest({
         id: testRaw.id,
         title: testRaw.title,
         grade: testRaw.grade,
-        subject_name: subjectName,
+        subject_name: null,
         total_questions: testRaw.total_questions,
+        exam_range_text: testRaw.exam_range_text ?? null,
       });
 
       const [questionsRes, classIds] = await Promise.all([
         supabase.from('questions').select(`
           id, question_number, answer, score, difficulty, question_comment,
+          subjects:subject_id(name),
           units_major:major_unit_id(name),
           units_middle:middle_unit_id(name),
           units_small:small_unit_id(name)
@@ -203,11 +206,16 @@ export default function TestWideAnalysisPage({ params }: { params: Promise<{ id:
         score: scoreOrFallback(q.score, questionCount),
         difficulty: q.difficulty,
         question_comment: q.question_comment ?? null,
+        subject_name: getQuestionSubjectName(q.subjects),
         major_unit_name: pickName(q.units_major),
         middle_unit_name: pickName(q.units_middle),
         small_unit_name: pickName(q.units_small),
       }));
       setQuestions(qs);
+      setTest((prev) => prev ? {
+        ...prev,
+        subject_name: formatSubjectList(qs.map((q) => q.subject_name)),
+      } : prev);
 
       if (classIds.length === 0) { setLoading(false); return; }
 
@@ -368,15 +376,21 @@ export default function TestWideAnalysisPage({ params }: { params: Promise<{ id:
     return map;
   }
 
-  const majorUnits = buildUnitMap((q) => q.major_unit_name || '미분류');
+  const subjectUnits = buildUnitMap((q) => q.subject_name || '미분류');
+  const majorUnits = buildUnitMap((q) => {
+    const subject = q.subject_name || '미분류';
+    return `${subject} > ${q.major_unit_name || '미분류'}`;
+  });
   const middleUnits = buildUnitMap((q) => {
+    const subject = q.subject_name || '미분류';
     const maj = q.major_unit_name || '미분류';
-    return `${maj} > ${q.middle_unit_name || '미분류'}`;
+    return `${subject} > ${maj} > ${q.middle_unit_name || '미분류'}`;
   });
   const smallUnits = buildUnitMap((q) => {
+    const subject = q.subject_name || '미분류';
     const maj = q.major_unit_name || '미분류';
     const mid = q.middle_unit_name || '미분류';
-    return `${maj} > ${mid} > ${q.small_unit_name || '미분류'}`;
+    return `${subject} > ${maj} > ${mid} > ${q.small_unit_name || '미분류'}`;
   });
 
   const diffLevels = [1, 2, 3, 4, 5, 6, 7, 8].map((level) => {
@@ -466,6 +480,7 @@ export default function TestWideAnalysisPage({ params }: { params: Promise<{ id:
     { label: '테스트명', value: test.title },
     { label: '학년', value: test.grade || '–' },
     { label: '과목', value: test.subject_name || '–' },
+    { label: '시험 범위', value: test.exam_range_text?.trim() || '범위 미입력' },
     { label: '총 문항 수', value: `${questions.length}문항` },
     { label: '부여된 반 수', value: `${classes.length}개` },
     { label: '전체 응시 학생 수', value: `${students.length}명` },
@@ -824,8 +839,9 @@ export default function TestWideAnalysisPage({ params }: { params: Promise<{ id:
           </div>
 
           <section className="report-section rounded-xl border p-6" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
-            <SectionTitle>단원별 전체 성취도</SectionTitle>
-            <div className="space-y-4">
+              <SectionTitle>단원별 전체 성취도</SectionTitle>
+              <div className="space-y-4">
+              <UnitTable title="과목" entries={[...subjectUnits.entries()]} thStyle={thStyle} tdStyle={tdStyle} />
               <UnitTable title="대단원" entries={[...majorUnits.entries()]} thStyle={thStyle} tdStyle={tdStyle} />
               {middleUnits.size > 0 && <UnitTable title="중단원" entries={[...middleUnits.entries()]} thStyle={thStyle} tdStyle={tdStyle} />}
               {smallUnits.size > 0 && <UnitTable title="소단원" entries={[...smallUnits.entries()]} thStyle={thStyle} tdStyle={tdStyle} />}

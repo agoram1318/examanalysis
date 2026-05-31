@@ -1,28 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Save, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import Select from '@/components/ui/Select';
-import { getSubjectDisplayName } from '@/lib/report-utils';
-
-// ── Supabase subjects 행 타입
-type SubjectRow = { id: number; name: string };
 
 // ── 폼 필드 키 타입
-type FormKey = 'title' | 'grade' | 'subject_id' | 'exam_range_text' | 'total_questions';
+type FormKey = 'title' | 'grade' | 'exam_range_text' | 'total_questions';
 
 type FormState = Record<FormKey, string>;
 
 const INITIAL_FORM: FormState = {
   title: '',
   grade: '',
-  subject_id: '',
   exam_range_text: '',
   total_questions: '',
 };
@@ -30,34 +24,11 @@ const INITIAL_FORM: FormState = {
 export default function NewTestPage() {
   const router = useRouter();
 
-  // ── 과목 목록
-  const [subjects, setSubjects] = useState<SubjectRow[]>([]);
-  const [subjectsLoading, setSubjectsLoading] = useState(true);
-  const [subjectsError, setSubjectsError] = useState<string | null>(null);
-
   // ── 폼 상태
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [errors, setErrors] = useState<Partial<Record<FormKey, string>>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-
-  // ── subjects 테이블에서 과목 로드
-  useEffect(() => {
-    async function loadSubjects() {
-      const { data, error } = await supabase
-        .from('subjects')
-        .select('id, name')
-        .order('id');
-
-      if (error) {
-        setSubjectsError('과목 목록을 불러오지 못했습니다. Supabase 연결을 확인해주세요.');
-      } else {
-        setSubjects(data ?? []);
-      }
-      setSubjectsLoading(false);
-    }
-    loadSubjects();
-  }, []);
 
   // ── 필드 변경 핸들러 (에러 즉시 제거)
   const handleChange =
@@ -71,7 +42,6 @@ export default function NewTestPage() {
   const validate = (): boolean => {
     const errs: Partial<Record<FormKey, string>> = {};
     if (!form.title.trim()) errs.title = '테스트명을 입력해주세요.';
-    if (!form.subject_id) errs.subject_id = '과목을 선택해주세요.';
     const n = parseInt(form.total_questions, 10);
     if (!form.total_questions.trim() || isNaN(n) || n < 1) {
       errs.total_questions = '1 이상의 숫자를 입력해주세요.';
@@ -93,7 +63,7 @@ export default function NewTestPage() {
       .insert({
         title: form.title.trim(),
         grade: form.grade.trim() || null,
-        subject_id: Number(form.subject_id),
+        subject_id: null,
         exam_range_text: form.exam_range_text.trim() || null,
         total_questions: parseInt(form.total_questions, 10),
       })
@@ -134,17 +104,6 @@ export default function NewTestPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* ── 과목 로드 에러 배너 ── */}
-        {subjectsError && (
-          <div
-            className="flex items-start gap-2 px-4 py-3 rounded-lg border text-sm"
-            style={{ background: '#fff5f5', borderColor: '#fca5a5', color: '#dc2626' }}
-          >
-            <AlertCircle size={16} className="shrink-0 mt-0.5" />
-            {subjectsError}
-          </div>
-        )}
-
         {/* ── 기본 정보 카드 ── */}
         <Card>
           <CardHeader>
@@ -167,31 +126,6 @@ export default function NewTestPage() {
               value={form.grade}
               onChange={handleChange('grade')}
             />
-
-            {/* 과목 */}
-            <div className="flex flex-col gap-1">
-              <Select
-                label="과목 *"
-                value={form.subject_id}
-                onChange={handleChange('subject_id')}
-                disabled={subjectsLoading || !!subjectsError}
-                options={subjects.map((s) => ({ value: String(s.id), label: getSubjectDisplayName(s.name) ?? s.name }))}
-                placeholder={
-                  subjectsLoading
-                    ? '과목 불러오는 중…'
-                    : subjectsError
-                    ? '과목 로드 실패'
-                    : '과목을 선택해주세요'
-                }
-                error={errors.subject_id}
-              />
-              {subjectsLoading && (
-                <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--fg-muted)' }}>
-                  <Loader2 size={12} className="animate-spin" />
-                  Supabase에서 과목 목록을 불러오는 중...
-                </span>
-              )}
-            </div>
 
             {/* 시험 범위 */}
             <div className="flex flex-col gap-1">

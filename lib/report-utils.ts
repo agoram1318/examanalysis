@@ -17,6 +17,18 @@ export function getSubjectDisplayName(name: string | null | undefined): string |
   return name;
 }
 
+export function getQuestionSubjectName(raw: unknown): string | null {
+  return getSubjectDisplayName(pickUnitName(raw));
+}
+
+export function formatSubjectList(names: Array<string | null | undefined>, fallback = '문항 입력 전'): string {
+  const unique = names
+    .map((name) => getSubjectDisplayName(name)?.trim())
+    .filter((name): name is string => !!name);
+  const deduped = [...new Set(unique)];
+  return deduped.length > 0 ? deduped.join(', ') : fallback;
+}
+
 export function scoreOrFallback(score: unknown, questionCount: number): number {
   const value = Number(score);
   if (Number.isFinite(value) && value > 0) return value;

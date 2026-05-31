@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft, Save, AlertCircle, Loader2, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Button from '@/components/ui/Button';
-import { formatScoreValue } from '@/lib/report-utils';
+import { formatScoreValue, getSubjectDisplayName } from '@/lib/report-utils';
 
 // ─────────────────────────────────────────────
 // 타입 정의
@@ -15,10 +15,10 @@ type TestRow = {
   id: number;
   title: string;
   grade: string | null;
-  subject_id: number | null;
   total_questions: number;
 };
 
+type Subject = { id: number; name: string };
 type MajorUnit  = { id: number; name: string; subject_id: number };
 type MiddleUnit = { id: number; name: string; major_unit_id: number };
 type SmallUnit  = { id: number; name: string; middle_unit_id: number };
@@ -28,6 +28,7 @@ type QuestionForm = {
   question_format: 'objective' | 'subjective';
   answer: string;
   score: string;
+  subject_id: number | null;
   major_unit_id: number | null;
   middle_unit_id: number | null;
   small_unit_id: number | null;
@@ -112,6 +113,7 @@ function makeDefaultQuestion(num: number): QuestionForm {
     question_format: 'objective',
     answer: '',
     score: '',
+    subject_id: null,
     major_unit_id: null,
     middle_unit_id: null,
     small_unit_id: null,
@@ -134,6 +136,7 @@ type RowProps = {
   q: QuestionForm;
   idx: number;
   autoScore: number | null;
+  subjects: Subject[];
   majorUnits: MajorUnit[];
   allMiddles: MiddleUnit[];
   allSmalls: SmallUnit[];
@@ -141,8 +144,11 @@ type RowProps = {
 };
 
 const QuestionRow = React.memo(function QuestionRow({
-  q, idx, autoScore, majorUnits, allMiddles, allSmalls, onChange,
+  q, idx, autoScore, subjects, majorUnits, allMiddles, allSmalls, onChange,
 }: RowProps) {
+  const filteredMajors = q.subject_id
+    ? majorUnits.filter(m => m.subject_id === q.subject_id)
+    : [];
   const filteredMiddles = allMiddles.filter(m => m.major_unit_id === q.major_unit_id);
   const filteredSmalls  = allSmalls.filter(s => s.middle_unit_id === q.middle_unit_id);
 
@@ -199,9 +205,37 @@ const QuestionRow = React.memo(function QuestionRow({
         />
       </td>
 
+      {/* 과목 */}
+      <td className="px-2 py-2">
+        {subjects.length === 0 ? (
+          <span className="text-xs px-2" style={{ color: 'var(--fg-muted)' }}>데이터 없음</span>
+        ) : (
+          <select
+            className={cellInput}
+            style={{ ...cellBorder, width: 132 }}
+            value={q.subject_id ?? ''}
+            onChange={e =>
+              onChange(idx, {
+                subject_id: e.target.value ? Number(e.target.value) : null,
+                major_unit_id: null,
+                middle_unit_id: null,
+                small_unit_id: null,
+              })
+            }
+          >
+            <option value="">선택 안함</option>
+            {subjects.map(s => (
+              <option key={s.id} value={s.id}>{getSubjectDisplayName(s.name) ?? s.name}</option>
+            ))}
+          </select>
+        )}
+      </td>
+
       {/* 대단원 */}
       <td className="px-2 py-2">
-        {majorUnits.length === 0 ? (
+        {!q.subject_id ? (
+          <span className="text-xs px-2" style={{ color: 'var(--fg-muted)' }}>과목 먼저 선택</span>
+        ) : filteredMajors.length === 0 ? (
           <span className="text-xs px-2" style={{ color: 'var(--fg-muted)' }}>데이터 없음</span>
         ) : (
           <select
@@ -217,7 +251,7 @@ const QuestionRow = React.memo(function QuestionRow({
             }
           >
             <option value="">선택 안함</option>
-            {majorUnits.map(u => (
+            {filteredMajors.map(u => (
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
           </select>
@@ -317,6 +351,7 @@ export default function QuestionsPage({
   const router = useRouter();
 
   const [test, setTest]           = useState<TestRow | null>(null);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [majorUnits, setMajorUnits] = useState<MajorUnit[]>([]);
   const [allMiddles, setAllMiddles] = useState<MiddleUnit[]>([]);
   const [allSmalls, setAllSmalls]   = useState<SmallUnit[]>([]);
@@ -339,7 +374,7 @@ export default function QuestionsPage({
       // 1. 테스트 정보
       const { data: testData, error: testErr } = await supabase
         .from('tests')
-        .select('id, title, grade, subject_id, total_questions')
+        .select('id, title, grade, total_questions')
         .eq('id', testId)
         .single();
 
@@ -350,43 +385,24 @@ export default function QuestionsPage({
       }
       setTest(testData);
 
-      // 2. 단원 데이터 (과목 기반, 병렬 로드)
-      if (testData.subject_id) {
-        const [majorsRes, midRes] = await Promise.all([
-          supabase
-            .from('units_major')
-            .select('id, name, subject_id')
-            .eq('subject_id', testData.subject_id)
-            .order('id'),
-          supabase
-            .from('units_middle')
-            .select('id, name, major_unit_id')
-            .order('id'),
-        ]);
+      // 2. 과목/단원 데이터 전체 로드
+      const [subjectsRes, majorsRes, middlesRes, smallsRes] = await Promise.all([
+        supabase.from('subjects').select('id, name').order('id'),
+        supabase.from('units_major').select('id, name, subject_id').order('id'),
+        supabase.from('units_middle').select('id, name, major_unit_id').order('id'),
+        supabase.from('units_small').select('id, name, middle_unit_id').order('id'),
+      ]);
 
-        const majors  = majorsRes.data ?? [];
-        const majorIds = majors.map(m => m.id);
-        const middles = (midRes.data ?? []).filter(m => majorIds.includes(m.major_unit_id));
-
-        setMajorUnits(majors);
-        setAllMiddles(middles);
-
-        if (middles.length > 0) {
-          const middleIds = middles.map(m => m.id);
-          const { data: smalls } = await supabase
-            .from('units_small')
-            .select('id, name, middle_unit_id')
-            .in('middle_unit_id', middleIds)
-            .order('id');
-          setAllSmalls(smalls ?? []);
-        }
-      }
+      setSubjects(subjectsRes.data ?? []);
+      setMajorUnits(majorsRes.data ?? []);
+      setAllMiddles(middlesRes.data ?? []);
+      setAllSmalls(smallsRes.data ?? []);
 
       // 3. 기존 questions 데이터
       const { data: existingQs } = await supabase
         .from('questions')
         .select(
-          'question_number, question_format, answer, score, major_unit_id, middle_unit_id, small_unit_id, difficulty, question_comment'
+          'question_number, question_format, answer, score, subject_id, major_unit_id, middle_unit_id, small_unit_id, difficulty, question_comment'
         )
         .eq('test_id', testId)
         .order('question_number');
@@ -398,6 +414,7 @@ export default function QuestionsPage({
             question_format: (q.question_format === 'subjective' ? 'subjective' : 'objective') as QuestionForm['question_format'],
             answer:          q.answer ?? '',
             score:           q.score === null || q.score === undefined ? '' : String(Number(q.score)),
+            subject_id:      q.subject_id ?? null,
             major_unit_id:   q.major_unit_id ?? null,
             middle_unit_id:  q.middle_unit_id ?? null,
             small_unit_id:   q.small_unit_id ?? null,
@@ -426,6 +443,11 @@ export default function QuestionsPage({
         qs.map((q, i) => {
           if (i !== idx) return q;
           const updated = { ...q, ...patch };
+          if ('subject_id' in patch) {
+            updated.major_unit_id = null;
+            updated.middle_unit_id = null;
+            updated.small_unit_id = null;
+          }
           if ('major_unit_id' in patch) {
             updated.middle_unit_id = null;
             updated.small_unit_id  = null;
@@ -479,7 +501,7 @@ export default function QuestionsPage({
       question_format: q.question_format,
       answer:          q.answer.trim() || null,
       score:           scorePlan.resolvedScores[index],
-      subject_id:      test?.subject_id ?? null,
+      subject_id:      q.subject_id,
       major_unit_id:   q.major_unit_id,
       middle_unit_id:  q.middle_unit_id,
       small_unit_id:   q.small_unit_id,
@@ -590,12 +612,12 @@ export default function QuestionsPage({
       </div>
 
       {/* ── 단원 데이터 없음 안내 ── */}
-      {majorUnits.length === 0 && (
+      {subjects.length === 0 && (
         <div
           className="px-4 py-3 mb-4 rounded-lg border text-sm"
           style={{ background: '#fefce8', borderColor: '#fde047', color: '#713f12' }}
         >
-          이 과목의 단원 데이터가 아직 Supabase에 없습니다. 단원 선택 없이 나머지 항목만 입력할 수 있습니다.
+          과목 데이터가 아직 Supabase에 없습니다. 과목/단원 선택 없이 나머지 항목만 입력할 수 있습니다.
         </div>
       )}
 
@@ -645,7 +667,7 @@ export default function QuestionsPage({
         </div>
 
         <div className="overflow-x-auto">
-          <table style={{ minWidth: 1080, borderCollapse: 'collapse', width: '100%' }}>
+          <table style={{ minWidth: 1220, borderCollapse: 'collapse', width: '100%' }}>
             <thead style={{ background: 'var(--bg-base)' }}>
               <tr>
                 {[
@@ -653,6 +675,7 @@ export default function QuestionsPage({
                   { label: '문항 형식', w: 112 },
                   { label: '정답',      w: 88  },
                   { label: '배점',      w: 72  },
+                  { label: '과목',      w: 148 },
                   { label: '대단원',    w: 152 },
                   { label: '중단원',    w: 152 },
                   { label: '소단원',    w: 152 },
@@ -681,6 +704,7 @@ export default function QuestionsPage({
                   q={q}
                   idx={idx}
                   autoScore={scorePlan.autoScores[idx]}
+                  subjects={subjects}
                   majorUnits={majorUnits}
                   allMiddles={allMiddles}
                   allSmalls={allSmalls}

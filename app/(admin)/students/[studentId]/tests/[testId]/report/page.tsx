@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { fetchTestsForClass } from '@/lib/class-tests';
-import { formatScoreValue, getSubjectDisplayName, scoreOrFallback } from '@/lib/report-utils';
+import { formatScoreValue, formatSubjectList, getQuestionSubjectName, scoreOrFallback } from '@/lib/report-utils';
 import Button from '@/components/ui/Button';
 import PrintReportLink from '@/components/reports/PrintReportLink';
 
@@ -45,6 +45,7 @@ type QuestionRow = {
   score: number;
   difficulty: number | null;
   question_comment: string | null;
+  subject_name: string | null;
   major_unit_name: string | null;
   middle_unit_name: string | null;
   small_unit_name: string | null;
@@ -952,7 +953,7 @@ export default function StudentReportPage({
       // 3. 테스트 (과목 포함)
       const { data: testRaw, error: testErr } = await supabase
         .from('tests')
-        .select('id, title, grade, exam_range_text, subjects(name)')
+        .select('id, title, grade, exam_range_text')
         .eq('id', testId)
         .single();
 
@@ -962,16 +963,11 @@ export default function StudentReportPage({
         return;
       }
 
-      const subjectsRaw = testRaw.subjects as unknown as { name: string } | { name: string }[] | null;
-      const subjectNameRaw = Array.isArray(subjectsRaw)
-        ? (subjectsRaw[0]?.name ?? null)
-        : (subjectsRaw?.name ?? null);
-      const subjectName = getSubjectDisplayName(subjectNameRaw);
       setTest({
         id:           testRaw.id,
         title:        testRaw.title,
         grade:        testRaw.grade,
-        subject_name: subjectName,
+        subject_name: null,
         exam_range_text: testRaw.exam_range_text ?? null,
       });
 
@@ -981,7 +977,7 @@ export default function StudentReportPage({
         .select(`
           id, question_number, question_format, answer, score,
           difficulty, question_comment,
-          subjects:subject_id(order_index),
+          subjects:subject_id(name, order_index),
           units_major:major_unit_id(name, order_index),
           units_middle:middle_unit_id(name, order_index),
           units_small:small_unit_id(name, order_index)
@@ -1012,6 +1008,7 @@ export default function StudentReportPage({
           score:            scoreOrFallback(q.score, questionCount),
           difficulty:       q.difficulty,
           question_comment: q.question_comment ?? null,
+          subject_name:     getQuestionSubjectName(q.subjects),
           major_unit_name:  pickName(q.units_major),
           middle_unit_name: pickName(q.units_middle),
           small_unit_name:  pickName(q.units_small),
@@ -1027,6 +1024,10 @@ export default function StudentReportPage({
         setLoading(false);
         return;
       }
+      setTest((prev) => prev ? {
+        ...prev,
+        subject_name: formatSubjectList(questions.map((q) => q.subject_name)),
+      } : prev);
 
       // 5. 학생 답안
       const questionIds = questions.map((q) => q.id);
@@ -1115,10 +1116,15 @@ export default function StudentReportPage({
 
   // 단원별 성취도 (대단원)
   const curriculumRows = [...qaRows].sort(curriculumCompare);
-  const majorStats = groupStats(curriculumRows, (qa) => qa.major_unit_name || '미분류');
+  const subjectStats = groupStats(curriculumRows, (qa) => qa.subject_name || '미분류');
+  const majorStats = groupStats(curriculumRows, (qa) =>
+    `${qa.subject_name || '미분류'} > ${qa.major_unit_name || '미분류'}`
+  );
   // 중단원별
   const middleStats = groupStats(curriculumRows, (qa) =>
-    qa.middle_unit_name ? `${qa.major_unit_name ?? ''} > ${qa.middle_unit_name}` : '미분류'
+    qa.middle_unit_name
+      ? `${qa.subject_name || '미분류'} > ${qa.major_unit_name || '미분류'} > ${qa.middle_unit_name}`
+      : `${qa.subject_name || '미분류'} > ${qa.major_unit_name || '미분류'} > 미분류`
   );
   // 난이도별
   const diffStats = groupStats(qaRows, (qa) => difficultyGroup(qa.difficulty));
@@ -1371,6 +1377,9 @@ export default function StudentReportPage({
               <EmptyState text="문항에 단원 정보가 입력되지 않았습니다." />
             ) : (
               <div className="space-y-3">
+                <AnalysisTable
+                  stats={subjectStats.map((s) => ({ ...s, name: `▶ ${s.name}` }))}
+                />
                 <AchievementCards stats={majorStats} emptyText="단원 정보가 없습니다." />
                 <AnalysisTable
                   stats={majorStats.map((s) => ({ ...s, name: `▶ ${s.name}` }))}
@@ -1553,6 +1562,7 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
     { label: '배점',      w: 56 },
     { label: '찍음',      w: 52 },
     { label: '미응답',    w: 60 },
+    { label: '과목',      w: 96 },
     { label: '대단원',    w: 100 },
     { label: '중단원',    w: 100 },
     { label: '소단원',    w: 100 },
@@ -1566,7 +1576,7 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
       style={{ borderColor: 'var(--border)' }}
     >
       <div className="overflow-x-auto">
-        <table style={{ minWidth: 1140, borderCollapse: 'collapse', width: '100%' }}>
+        <table style={{ minWidth: 1240, borderCollapse: 'collapse', width: '100%' }}>
           <thead style={{ background: 'var(--bg-base)' }}>
             <tr>
               {cols.map((col) => (
@@ -1697,6 +1707,11 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
                     ) : (
                       <span style={{ color: 'var(--fg-muted)', fontSize: 12 }}>–</span>
                     )}
+                  </td>
+
+                  {/* 대단원 */}
+                  <td className="px-3 py-2 text-xs" style={{ color: 'var(--fg-sub)' }}>
+                    {qa.subject_name ?? '–'}
                   </td>
 
                   {/* 대단원 */}

@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase/client';
 import { fetchTestsForClass } from '@/lib/class-tests';
 import Button from '@/components/ui/Button';
 import PrintReportLink from '@/components/reports/PrintReportLink';
-import { formatScoreValue, getSubjectDisplayName, scoreOrFallback } from '@/lib/report-utils';
+import { formatScoreValue, formatSubjectList, getQuestionSubjectName, scoreOrFallback } from '@/lib/report-utils';
 
 // ─────────────────────────────────────────────
 // 타입
@@ -42,6 +42,7 @@ type QuestionRow = {
   score: number;
   difficulty: number | null;
   question_comment: string | null;
+  subject_name: string | null;
   major_unit_name: string | null;
   middle_unit_name: string | null;
   small_unit_name: string | null;
@@ -233,24 +234,19 @@ export default function ClassAnalysisPage({
       // 2. 테스트
       const { data: testRaw, error: testErr } = await supabase
         .from('tests')
-        .select('id, title, grade, subjects(name)')
+        .select('id, title, grade')
         .eq('id', testId)
         .single();
 
       if (testErr || !testRaw) { setNotFound(true); setLoading(false); return; }
-      const subjectName = getSubjectDisplayName((() => {
-        const s = testRaw.subjects as unknown as UnitRaw;
-        if (!s) return null;
-        if (Array.isArray(s)) return s[0]?.name ?? null;
-        return (s as { name: string }).name ?? null;
-      })());
-      setTest({ id: testRaw.id, title: testRaw.title, grade: testRaw.grade, subject_name: subjectName });
+      setTest({ id: testRaw.id, title: testRaw.title, grade: testRaw.grade, subject_name: null });
 
       // 3. 학생 + 문항 (병렬)
       const [studentsRes, questionsRes] = await Promise.all([
         supabase.from('students').select('id, student_name, student_code').eq('class_id', classId).order('student_code'),
         supabase.from('questions').select(`
           id, question_number, answer, score, difficulty, question_comment,
+          subjects:subject_id(name),
           units_major:major_unit_id(name),
           units_middle:middle_unit_id(name),
           units_small:small_unit_id(name)
@@ -268,11 +264,16 @@ export default function ClassAnalysisPage({
         score:            scoreOrFallback(q.score, questionCount),
         difficulty:       q.difficulty,
         question_comment: q.question_comment ?? null,
+        subject_name:     getQuestionSubjectName(q.subjects),
         major_unit_name:  pickName(q.units_major),
         middle_unit_name: pickName(q.units_middle),
         small_unit_name:  pickName(q.units_small),
       }));
       setQuestions(qs);
+      setTest((prev) => prev ? {
+        ...prev,
+        subject_name: formatSubjectList(qs.map((q) => q.subject_name)),
+      } : prev);
 
       if (!studentsData.length || !qs.length) { setLoading(false); return; }
 
@@ -358,18 +359,26 @@ export default function ClassAnalysisPage({
     .slice(0, 5);
 
   // 단원별 집계
+  const subjectMap = new Map<string, { total: number; correct: number }>();
   const majorMap = new Map<string, { total: number; correct: number }>();
   const middleMap = new Map<string, { total: number; correct: number }>();
   allAnswers.forEach((a) => {
     const q = questions.find((q) => q.id === a.question_id);
     if (!q) return;
+    const subject = q.subject_name || '미분류';
     const maj = q.major_unit_name || '미분류';
-    const mid = q.middle_unit_name ? `${maj} > ${q.middle_unit_name}` : `${maj} > 미분류`;
+    const majKey = `${subject} > ${maj}`;
+    const mid = q.middle_unit_name ? `${majKey} > ${q.middle_unit_name}` : `${majKey} > 미분류`;
 
-    const majEntry = majorMap.get(maj) ?? { total: 0, correct: 0 };
+    const subEntry = subjectMap.get(subject) ?? { total: 0, correct: 0 };
+    subEntry.total++;
+    if (a.is_correct) subEntry.correct++;
+    subjectMap.set(subject, subEntry);
+
+    const majEntry = majorMap.get(majKey) ?? { total: 0, correct: 0 };
     majEntry.total++;
     if (a.is_correct) majEntry.correct++;
-    majorMap.set(maj, majEntry);
+    majorMap.set(majKey, majEntry);
 
     const midEntry = middleMap.get(mid) ?? { total: 0, correct: 0 };
     midEntry.total++;
@@ -872,6 +881,7 @@ export default function ClassAnalysisPage({
           >
             <SectionTitle>단원별 정답률 분석</SectionTitle>
             <div className="space-y-4">
+              <UnitTable label="과목" entries={[...subjectMap.entries()]} />
               <UnitTable label="대단원" entries={[...majorMap.entries()]} />
               {middleMap.size > 0 && <UnitTable label="중단원" entries={[...middleMap.entries()]} />}
             </div>

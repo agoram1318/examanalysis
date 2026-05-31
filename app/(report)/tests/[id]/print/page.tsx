@@ -12,7 +12,7 @@ import {
   computeEstimatedGrade,
   generateTestWideComment,
 } from '@/lib/test-wide-analysis';
-import { pickUnitName, formatReportDate, getSubjectDisplayName, scoreOrFallback, formatScoreValue } from '@/lib/report-utils';
+import { formatReportDate, formatSubjectList, getQuestionSubjectName, scoreOrFallback, formatScoreValue } from '@/lib/report-utils';
 import ReportPage from '@/components/reports/ReportPage';
 import ReportHeader from '@/components/reports/ReportHeader';
 import ReportSection from '@/components/reports/ReportSection';
@@ -42,6 +42,7 @@ type QuestionRow = {
   answer: string | null;
   score: number;
   question_comment: string | null;
+  subject_name: string | null;
 };
 
 type AnswerRow = {
@@ -82,7 +83,7 @@ export default function TestPrintPage({ params }: { params: Promise<{ id: string
     async function load() {
       const { data: testRaw, error: testErr } = await supabase
         .from('tests')
-        .select('id, title, grade, total_questions, subjects(name)')
+        .select('id, title, grade, total_questions')
         .eq('id', testId)
         .single();
 
@@ -103,7 +104,7 @@ export default function TestPrintPage({ params }: { params: Promise<{ id: string
 
       const { data: questionsRaw } = await supabase
         .from('questions')
-        .select('id, question_number, answer, score, question_comment')
+        .select('id, question_number, answer, score, question_comment, subjects:subject_id(name)')
         .eq('test_id', testId)
         .order('question_number');
 
@@ -114,13 +115,14 @@ export default function TestPrintPage({ params }: { params: Promise<{ id: string
         answer: q.answer,
         score: scoreOrFallback(q.score, questionCount),
         question_comment: q.question_comment ?? null,
+        subject_name: getQuestionSubjectName(q.subjects),
       }));
       setQuestions(qs);
 
       setMeta([
         { label: '테스트명', value: testRaw.title },
         { label: '학년', value: testRaw.grade || '–' },
-        { label: '과목', value: getSubjectDisplayName(pickUnitName(testRaw.subjects)) || '–' },
+        { label: '과목', value: formatSubjectList(qs.map((q) => q.subject_name)) },
         { label: '총 문항 수', value: `${qs.length}문항` },
         { label: '부여된 반 수', value: `${(classesRaw ?? []).length}개` },
       ]);

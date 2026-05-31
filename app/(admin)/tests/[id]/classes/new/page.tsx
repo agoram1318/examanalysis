@@ -5,10 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Save, AlertCircle, Loader2, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { createClassWithTestAssignment } from '@/lib/class-tests';
+import { createClassWithTestAssignment, fetchSubjectNamesByTest } from '@/lib/class-tests';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import { getSubjectDisplayName } from '@/lib/report-utils';
 import Input from '@/components/ui/Input';
 
 type TestRow = {
@@ -16,7 +15,7 @@ type TestRow = {
   title: string;
   grade: string | null;
   total_questions: number;
-  subjects: { name: string } | null;
+  subject_name: string;
 };
 
 type FormState = {
@@ -56,12 +55,18 @@ export default function NewClassPage({
     }
     supabase
       .from('tests')
-      .select('id, title, grade, total_questions, subjects(name)')
+      .select('id, title, grade, total_questions')
       .eq('id', testId)
       .single()
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
         if (error || !data) setNotFound(true);
-        else setTest(data as unknown as TestRow);
+        else {
+          const subjectNames = await fetchSubjectNamesByTest([testId]);
+          setTest({
+            ...(data as unknown as Omit<TestRow, 'subject_name'>),
+            subject_name: subjectNames.get(testId) ?? '문항 입력 전',
+          });
+        }
         setLoading(false);
       });
   }, [testId]);
@@ -167,7 +172,7 @@ export default function NewClassPage({
       >
         {[
           { label: '테스트명', value: test.title },
-          { label: '과목',    value: getSubjectDisplayName(test.subjects?.name) ?? '–' },
+          { label: '과목',    value: test.subject_name },
           { label: '학년',    value: test.grade ?? '–' },
           { label: '총 문항', value: `${test.total_questions}문항` },
         ].map((item) => (

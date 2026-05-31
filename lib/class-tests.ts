@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
-import { getSubjectDisplayName } from '@/lib/report-utils';
+import { formatSubjectList, getQuestionSubjectName } from '@/lib/report-utils';
 
 export type TestSummary = {
   id: number;
@@ -10,12 +10,24 @@ export type TestSummary = {
   assigned_at?: string;
 };
 
-type SubjectRaw = { name: string } | { name: string }[] | null;
+export async function fetchSubjectNamesByTest(testIds: number[]): Promise<Map<number, string>> {
+  if (testIds.length === 0) return new Map();
 
-function pickSubjectName(raw: SubjectRaw): string | null {
-  if (!raw) return null;
-  const name = Array.isArray(raw) ? (raw[0]?.name ?? null) : (raw.name ?? null);
-  return getSubjectDisplayName(name);
+  const { data } = await supabase
+    .from('questions')
+    .select('test_id, subjects:subject_id(name)')
+    .in('test_id', testIds);
+
+  const map = new Map<number, string[]>();
+  (data ?? []).forEach((row) => {
+    const testId = Number(row.test_id);
+    const list = map.get(testId) ?? [];
+    const name = getQuestionSubjectName(row.subjects);
+    if (name) list.push(name);
+    map.set(testId, list);
+  });
+
+  return new Map([...map.entries()].map(([testId, names]) => [testId, formatSubjectList(names)]));
 }
 
 /** 반에 부여된 테스트 목록 (class_tests + 레거시 classes.test_id) */
@@ -24,7 +36,7 @@ export async function fetchTestsForClass(classId: number): Promise<TestSummary[]
     supabase.from('classes').select('test_id').eq('id', classId).single(),
     supabase
       .from('class_tests')
-      .select('test_id, assigned_at, tests(id, title, grade, total_questions, subjects(name))')
+      .select('test_id, assigned_at, tests(id, title, grade, total_questions)')
       .eq('class_id', classId)
       .order('assigned_at', { ascending: false }),
   ]);
@@ -37,7 +49,6 @@ export async function fetchTestsForClass(classId: number): Promise<TestSummary[]
       title: string;
       grade: string | null;
       total_questions: number;
-      subjects: SubjectRaw;
     } | null;
     if (!t) continue;
     byId.set(t.id, {
@@ -45,7 +56,7 @@ export async function fetchTestsForClass(classId: number): Promise<TestSummary[]
       title: t.title,
       grade: t.grade,
       total_questions: t.total_questions,
-      subject_name: pickSubjectName(t.subjects),
+      subject_name: null,
       assigned_at: row.assigned_at,
     });
   }
@@ -54,7 +65,7 @@ export async function fetchTestsForClass(classId: number): Promise<TestSummary[]
   if (legacyTestId && !byId.has(legacyTestId)) {
     const { data: legacy } = await supabase
       .from('tests')
-      .select('id, title, grade, total_questions, subjects(name)')
+      .select('id, title, grade, total_questions')
       .eq('id', legacyTestId)
       .single();
     if (legacy) {
@@ -63,12 +74,17 @@ export async function fetchTestsForClass(classId: number): Promise<TestSummary[]
         title: legacy.title,
         grade: legacy.grade,
         total_questions: legacy.total_questions,
-        subject_name: pickSubjectName(legacy.subjects as SubjectRaw),
+        subject_name: null,
       });
     }
   }
 
-  return [...byId.values()];
+  const summaries = [...byId.values()];
+  const subjectNames = await fetchSubjectNamesByTest(summaries.map((test) => test.id));
+  return summaries.map((test) => ({
+    ...test,
+    subject_name: subjectNames.get(test.id) ?? '문항 입력 전',
+  }));
 }
 
 /** 테스트에 부여된 반 ID 목록 (class_tests + 레거시 classes.test_id) */
