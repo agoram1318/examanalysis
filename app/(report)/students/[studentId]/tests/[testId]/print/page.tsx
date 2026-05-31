@@ -414,7 +414,7 @@ function MiniSummaryCard({
 }: {
   label: string;
   value: string;
-  sub: string;
+  sub?: string;
   accent?: boolean;
 }) {
   return (
@@ -424,7 +424,7 @@ function MiniSummaryCard({
     >
       <p className={`text-[11px] font-medium ${accent ? 'text-white/80' : 'text-stone-500'}`}>{label}</p>
       <p className={`mt-1 text-base font-bold leading-tight ${accent ? 'text-white' : 'text-stone-950'}`}>{value}</p>
-      <p className={`mt-1 text-[11px] ${accent ? 'text-white/75' : 'text-stone-500'}`}>{sub}</p>
+      {sub && <p className={`mt-1 text-[11px] ${accent ? 'text-white/75' : 'text-stone-500'}`}>{sub}</p>}
     </div>
   );
 }
@@ -947,19 +947,16 @@ export default function StudentPrintPage({
               <AccuracyGauge rate={scoreRate} correct={correctCount} total={qaRows.length} />
               <div className="grid grid-cols-2 gap-2">
                 <MiniSummaryCard label="총점" value={`${formatScoreValue(totalScore)} / ${formatScoreValue(totalPossible)}점`} sub="획득 점수" accent />
-                <MiniSummaryCard label="전체 응시자 평균점수" value={cohortAverage === null ? '산출 전' : `${formatScoreValue(cohortAverage)}점`} sub={cohortAverage === null ? '응시 데이터 부족' : `완료 ${completedStudentScores.length}명 기준`} />
+                <MiniSummaryCard label="전체 응시자 평균점수" value={cohortAverage === null ? '산출 전' : `${formatScoreValue(cohortAverage)}점`} />
                 <MiniSummaryCard label="취약 단원" value={weakestUnit ? cleanStatName(weakestUnit.name) : '–'} sub={correctRateText(weakestUnit)} />
                 <MiniSummaryCard label="보완 난이도" value={weakestDiff ? cleanStatName(weakestDiff.name) : '–'} sub={correctRateText(weakestDiff)} />
               </div>
             </div>
-            <div className="mt-2 grid grid-cols-6 gap-1.5">
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
               {[
                 ['정답 수', `${correctCount}개`],
                 ['오답 수', `${wrongCount}개`],
                 ['미응답 수', `${blankCount}개`],
-                ['찍음 수', `${guessedCount}개`],
-                ['찍어서 맞음', `${guessedCorrect}개`],
-                ['찍어서 틀림', `${guessedWrong}개`],
               ].map(([label, value]) => (
                 <div key={label} className="rounded border bg-stone-50 px-2 py-1.5" style={{ borderColor: 'var(--border)' }}>
                   <p className="text-[10px] text-stone-500">{label}</p>
@@ -1006,8 +1003,9 @@ export default function StudentPrintPage({
               <p className="report-empty">문항이 없습니다.</p>
             ) : (
               <ReportTable
-                headers={['번호', '형식', '정답', '학생 답', '결과', '점수', '배점', '찍음', '미응답', '대단원', '중단원', '소단원', '난이도', '학습 포인트']}
+                headers={['번호', '형식', '정답', '학생 답', '결과', '점수', '배점', '대단원', '중단원', '소단원', '난이도']}
                 compact
+                minWidth={900}
               >
                 {qaRows.map((qa, i) => {
                   const ans = qa.ans;
@@ -1032,13 +1030,10 @@ export default function StudentPrintPage({
                       </ReportTd>
                       <ReportTd align="center">{ans ? formatScoreValue(ans.earned_score) : '–'}</ReportTd>
                       <ReportTd align="center">{formatScoreValue(qa.score)}</ReportTd>
-                      <ReportTd align="center">{ans?.is_guessed ? 'O' : '–'}</ReportTd>
-                      <ReportTd align="center">{ans?.is_blank ? 'O' : '–'}</ReportTd>
-                      <ReportTd align="center">{qa.major_unit_name ?? '–'}</ReportTd>
-                      <ReportTd align="center">{qa.middle_unit_name ?? '–'}</ReportTd>
-                      <ReportTd align="center">{qa.small_unit_name ?? '–'}</ReportTd>
+                      <ReportTd className="min-w-28">{qa.major_unit_name ?? '–'}</ReportTd>
+                      <ReportTd className="min-w-36">{qa.middle_unit_name ?? '–'}</ReportTd>
+                      <ReportTd className="min-w-36">{qa.small_unit_name ?? '–'}</ReportTd>
                       <ReportTd align="center">{qa.difficulty ?? '–'}</ReportTd>
-                      <ReportTd>{qa.question_comment ?? '–'}</ReportTd>
                     </ReportTr>
                   );
                 })}
