@@ -122,6 +122,48 @@ function makeDefaultQuestion(num: number): QuestionForm {
   };
 }
 
+async function fetchAllSubjects(): Promise<Subject[]> {
+  const { data } = await supabase.from('subjects').select('id, name').order('id');
+  return data ?? [];
+}
+
+async function fetchAllMajorUnits(): Promise<MajorUnit[]> {
+  const { data } = await supabase.from('units_major').select('id, name, subject_id').order('id');
+  return data ?? [];
+}
+
+async function fetchAllMiddleUnits(): Promise<MiddleUnit[]> {
+  const pageSize = 1000;
+  const rows: MiddleUnit[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('units_middle')
+      .select('id, name, major_unit_id')
+      .order('id')
+      .range(from, from + pageSize - 1);
+    if (error || !data?.length) break;
+    rows.push(...data);
+    if (data.length < pageSize) break;
+  }
+  return rows;
+}
+
+async function fetchAllSmallUnits(): Promise<SmallUnit[]> {
+  const pageSize = 1000;
+  const rows: SmallUnit[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('units_small')
+      .select('id, name, middle_unit_id')
+      .order('id')
+      .range(from, from + pageSize - 1);
+    if (error || !data?.length) break;
+    rows.push(...data);
+    if (data.length < pageSize) break;
+  }
+  return rows;
+}
+
 // ─────────────────────────────────────────────
 // 셀 공통 스타일
 // ─────────────────────────────────────────────
@@ -387,16 +429,16 @@ export default function QuestionsPage({
 
       // 2. 과목/단원 데이터 전체 로드
       const [subjectsRes, majorsRes, middlesRes, smallsRes] = await Promise.all([
-        supabase.from('subjects').select('id, name').order('id'),
-        supabase.from('units_major').select('id, name, subject_id').order('id'),
-        supabase.from('units_middle').select('id, name, major_unit_id').order('id'),
-        supabase.from('units_small').select('id, name, middle_unit_id').order('id'),
+        fetchAllSubjects(),
+        fetchAllMajorUnits(),
+        fetchAllMiddleUnits(),
+        fetchAllSmallUnits(),
       ]);
 
-      setSubjects(subjectsRes.data ?? []);
-      setMajorUnits(majorsRes.data ?? []);
-      setAllMiddles(middlesRes.data ?? []);
-      setAllSmalls(smallsRes.data ?? []);
+      setSubjects(subjectsRes);
+      setMajorUnits(majorsRes);
+      setAllMiddles(middlesRes);
+      setAllSmalls(smallsRes);
 
       // 3. 기존 questions 데이터
       const { data: existingQs } = await supabase
