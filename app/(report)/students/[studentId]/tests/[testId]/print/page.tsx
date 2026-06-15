@@ -22,7 +22,9 @@ import ReportSection from '@/components/reports/ReportSection';
 import ReportTable, { ReportTd, ReportTr } from '@/components/reports/ReportTable';
 import PrintToolbar from '@/components/reports/PrintToolbar';
 import ReportComment from '@/components/reports/ReportComment';
+import NarrativeSummarySection from '@/components/reports/NarrativeSummary';
 import Button from '@/components/ui/Button';
+import { generateStudentNarrativeSummary } from '@/lib/narrative-summary';
 
 type QA = {
   id: number;
@@ -908,6 +910,7 @@ export default function StudentPrintPage({
   const causeStats = buildCauseStats(qaRows);
 
   const comment = qaRows.length > 0 ? generateComment(qaRows, totalScore, totalPossible) : '';
+  const narrativeSummary = generateStudentNarrativeSummary(qaRows);
   const questionCommentPoints = curriculumRows.filter((qa) => getQuestionStatus(qa));
   const today = formatReportDate();
   const backHref = `/students/${studentId}/tests/${testId}/report`;
@@ -1091,6 +1094,10 @@ export default function StudentPrintPage({
                 <li key={line} className="text-sm leading-relaxed text-stone-900">• {line}</li>
               ))}
             </ul>
+          </ReportSection>
+
+          <ReportSection title="학습 총평" className="report-interpretation-block">
+            <NarrativeSummarySection result={narrativeSummary} />
           </ReportSection>
         </div>
       </ReportPage>

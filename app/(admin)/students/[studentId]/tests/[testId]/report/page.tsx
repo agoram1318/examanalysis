@@ -11,6 +11,8 @@ import { fetchTestsForClass } from '@/lib/class-tests';
 import { formatScoreValue, formatSubjectList, getQuestionSubjectName, scoreOrFallback } from '@/lib/report-utils';
 import Button from '@/components/ui/Button';
 import PrintReportLink from '@/components/reports/PrintReportLink';
+import NarrativeSummarySection from '@/components/reports/NarrativeSummary';
+import { generateStudentNarrativeSummary } from '@/lib/narrative-summary';
 
 // ─────────────────────────────────────────────
 // 타입 정의
@@ -1142,6 +1144,7 @@ export default function StudentReportPage({
   const comment = qaRows.length > 0
     ? generateComment(qaRows, totalScore, totalPossible)
     : '';
+  const narrativeSummary = generateStudentNarrativeSummary(qaRows);
   const questionCommentPoints = curriculumRows.filter((qa) => getQuestionStatus(qa));
 
   // ─────────────────────────────────────────────
@@ -1483,6 +1486,17 @@ export default function StudentReportPage({
                   </li>
                 ))}
               </ul>
+            </div>
+          </section>
+
+          {/* 서술형 학습 총평 */}
+          <section className="report-section report-interpretation-block">
+            <SectionTitle>학습 총평</SectionTitle>
+            <div
+              className="rounded-xl px-5 py-4"
+              style={{ background: '#fff', border: '1px solid var(--border)' }}
+            >
+              <NarrativeSummarySection result={narrativeSummary} />
             </div>
           </section>
 
