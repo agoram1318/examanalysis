@@ -4,12 +4,13 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   GraduationCap, Plus, Users, PenLine, BarChart3,
-  Loader2, ClipboardList, Link2, Trash2,
+  Loader2, ClipboardList, Link2, Trash2, Edit2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/utils';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
+import Input from '@/components/ui/Input';
 
 type ClassRow = {
   id: number;
@@ -28,6 +29,12 @@ export default function ClassesPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
+
+  // 수정 모달
+  const [editTarget, setEditTarget] = useState<ClassRow | null>(null);
+  const [editForm, setEditForm] = useState({ class_name: '', teacher_name: '', academy_name: '' });
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const loadClasses = useCallback(async () => {
     const { data: rawList } = await supabase
@@ -78,6 +85,47 @@ export default function ClassesPage() {
   useEffect(() => {
     loadClasses();
   }, [loadClasses]);
+
+  const openEditModal = (cls: ClassRow) => {
+    setEditTarget(cls);
+    setEditForm({
+      class_name: cls.class_name ?? '',
+      teacher_name: cls.teacher_name ?? '',
+      academy_name: cls.academy_name ?? '',
+    });
+    setEditError(null);
+  };
+
+  const closeEditModal = () => {
+    if (saving) return;
+    setEditTarget(null);
+    setEditError(null);
+  };
+
+  const handleEditSave = async () => {
+    if (!editTarget) return;
+    if (!editForm.class_name.trim()) {
+      setEditError('반명을 입력해주세요.');
+      return;
+    }
+    setSaving(true);
+    setEditError(null);
+    const { error } = await supabase
+      .from('classes')
+      .update({
+        class_name: editForm.class_name.trim(),
+        teacher_name: editForm.teacher_name.trim() || null,
+        academy_name: editForm.academy_name.trim() || null,
+      })
+      .eq('id', editTarget.id);
+    setSaving(false);
+    if (error) {
+      setEditError(`저장에 실패했습니다. ${error.message}`);
+      return;
+    }
+    setEditTarget(null);
+    await loadClasses();
+  };
 
   const closeDeleteModal = () => {
     if (deleting) return;
@@ -276,6 +324,13 @@ export default function ClassesPage() {
                         </Link>
                         <Button
                           size="sm"
+                          variant="outline"
+                          onClick={() => openEditModal(cls)}
+                        >
+                          <Edit2 size={13} /> 수정
+                        </Button>
+                        <Button
+                          size="sm"
                           variant="danger"
                           onClick={() => {
                             setDeleteTarget(cls);
@@ -327,6 +382,63 @@ export default function ClassesPage() {
             </Button>
             <Button variant="danger" onClick={handleDeleteClass} loading={deleting} disabled={deleting}>
               삭제
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 반 수정 모달 */}
+      <Modal open={!!editTarget} onClose={closeEditModal} title="반 정보 수정" size="md">
+        <div className="space-y-4">
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--fg-sub)' }}>
+                반명 <span style={{ color: 'var(--accent)' }}>*</span>
+              </label>
+              <Input
+                value={editForm.class_name}
+                onChange={(e) => setEditForm((f) => ({ ...f, class_name: e.target.value }))}
+                placeholder="반명을 입력해주세요"
+                disabled={saving}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--fg-sub)' }}>
+                학원명
+              </label>
+              <Input
+                value={editForm.academy_name}
+                onChange={(e) => setEditForm((f) => ({ ...f, academy_name: e.target.value }))}
+                placeholder="학원명 (선택)"
+                disabled={saving}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--fg-sub)' }}>
+                강사명
+              </label>
+              <Input
+                value={editForm.teacher_name}
+                onChange={(e) => setEditForm((f) => ({ ...f, teacher_name: e.target.value }))}
+                placeholder="강사명 (선택)"
+                disabled={saving}
+              />
+            </div>
+          </div>
+          {editError && (
+            <p
+              className="rounded-lg border px-3 py-2 text-sm"
+              style={{ background: '#fef2f2', borderColor: '#fca5a5', color: '#dc2626' }}
+            >
+              {editError}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={closeEditModal} disabled={saving}>
+              취소
+            </Button>
+            <Button variant="accent" onClick={handleEditSave} loading={saving} disabled={saving}>
+              저장
             </Button>
           </div>
         </div>

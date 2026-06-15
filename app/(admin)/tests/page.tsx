@@ -10,11 +10,13 @@ import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/utils';
 import { formatSubjectList, getQuestionSubjectName } from '@/lib/report-utils';
 import Modal from '@/components/ui/Modal';
+import Input from '@/components/ui/Input';
 
 type TestRow = {
   id: number;
   title: string;
   grade: string | null;
+  exam_range_text: string | null;
   total_questions: number;
   created_at: string;
   subject_names: string[];
@@ -28,10 +30,16 @@ export default function TestsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
 
+  // 수정 모달
+  const [editTarget, setEditTarget] = useState<TestRow | null>(null);
+  const [editForm, setEditForm] = useState({ title: '', grade: '', exam_range_text: '' });
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
   const loadTests = useCallback(async () => {
     const { data } = await supabase
       .from('tests')
-      .select('id, title, grade, total_questions, created_at')
+      .select('id, title, grade, exam_range_text, total_questions, created_at')
       .order('created_at', { ascending: false });
     const rows = (data ?? []) as unknown as Omit<TestRow, 'subject_names'>[];
     const testIds = rows.map((test) => test.id);
@@ -59,6 +67,47 @@ export default function TestsPage() {
   useEffect(() => {
     loadTests();
   }, [loadTests]);
+
+  const openEditModal = (test: TestRow) => {
+    setEditTarget(test);
+    setEditForm({
+      title: test.title,
+      grade: test.grade ?? '',
+      exam_range_text: test.exam_range_text ?? '',
+    });
+    setEditError(null);
+  };
+
+  const closeEditModal = () => {
+    if (saving) return;
+    setEditTarget(null);
+    setEditError(null);
+  };
+
+  const handleEditSave = async () => {
+    if (!editTarget) return;
+    if (!editForm.title.trim()) {
+      setEditError('테스트명을 입력해주세요.');
+      return;
+    }
+    setSaving(true);
+    setEditError(null);
+    const { error } = await supabase
+      .from('tests')
+      .update({
+        title: editForm.title.trim(),
+        grade: editForm.grade.trim() || null,
+        exam_range_text: editForm.exam_range_text.trim() || null,
+      })
+      .eq('id', editTarget.id);
+    setSaving(false);
+    if (error) {
+      setEditError(`저장에 실패했습니다. ${error.message}`);
+      return;
+    }
+    setEditTarget(null);
+    await loadTests();
+  };
 
   const closeDeleteModal = () => {
     if (deleting) return;
@@ -248,6 +297,13 @@ export default function TestsPage() {
                     </Link>
                     <Button
                       size="sm"
+                      variant="outline"
+                      onClick={() => openEditModal(test)}
+                    >
+                      <Edit2 size={14} /> 테스트 수정
+                    </Button>
+                    <Button
+                      size="sm"
                       variant="danger"
                       onClick={() => {
                         setDeleteTarget(test);
@@ -291,6 +347,69 @@ export default function TestsPage() {
             </Button>
             <Button variant="danger" onClick={handleDeleteTest} loading={deleting} disabled={deleting}>
               삭제
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 테스트 수정 모달 */}
+      <Modal open={!!editTarget} onClose={closeEditModal} title="테스트 정보 수정" size="md">
+        <div className="space-y-4">
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--fg-sub)' }}>
+                테스트명 <span style={{ color: 'var(--accent)' }}>*</span>
+              </label>
+              <Input
+                value={editForm.title}
+                onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
+                placeholder="테스트명을 입력해주세요"
+                disabled={saving}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--fg-sub)' }}>
+                학년
+              </label>
+              <Input
+                value={editForm.grade}
+                onChange={(e) => setEditForm((f) => ({ ...f, grade: e.target.value }))}
+                placeholder="예: 고등학교 1학년"
+                disabled={saving}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--fg-sub)' }}>
+                테스트 범위
+              </label>
+              <Input
+                value={editForm.exam_range_text}
+                onChange={(e) => setEditForm((f) => ({ ...f, exam_range_text: e.target.value }))}
+                placeholder="예: 수학 1~3단원"
+                disabled={saving}
+              />
+            </div>
+          </div>
+          <div
+            className="rounded-lg border px-3 py-2 text-xs"
+            style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--fg-muted)' }}
+          >
+            테스트 난이도는 문항 입력 화면에서 각 문항의 난이도를 설정하면 자동으로 계산됩니다.
+          </div>
+          {editError && (
+            <p
+              className="rounded-lg border px-3 py-2 text-sm"
+              style={{ background: '#fef2f2', borderColor: '#fca5a5', color: '#dc2626' }}
+            >
+              {editError}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={closeEditModal} disabled={saving}>
+              취소
+            </Button>
+            <Button variant="accent" onClick={handleEditSave} loading={saving} disabled={saving}>
+              저장
             </Button>
           </div>
         </div>
