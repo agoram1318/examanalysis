@@ -1036,9 +1036,9 @@ export default function StudentPrintPage({
               <p className="report-empty">문항이 없습니다.</p>
             ) : (
               <ReportTable
-                headers={['번호', '형식', '정답', '학생 답', '결과', '점수', '배점', '대단원', '중단원', '소단원', '난이도']}
+                headers={['번호', '형식', '정답', '학생 답', '결과', '점수', '배점', '대단원', '중단원', '난이도']}
                 compact
-                minWidth={900}
+                minWidth={720}
               >
                 {qaRows.map((qa, i) => {
                   const ans = qa.ans;
@@ -1064,8 +1064,7 @@ export default function StudentPrintPage({
                       <ReportTd align="center">{ans ? formatScoreValue(ans.earned_score) : '–'}</ReportTd>
                       <ReportTd align="center">{formatScoreValue(qa.score)}</ReportTd>
                       <ReportTd className="min-w-28">{qa.major_unit_name ?? '–'}</ReportTd>
-                      <ReportTd className="min-w-36">{qa.middle_unit_name ?? '–'}</ReportTd>
-                      <ReportTd className="min-w-36">{qa.small_unit_name ?? '–'}</ReportTd>
+                      <ReportTd className="min-w-32">{qa.middle_unit_name ?? '–'}</ReportTd>
                       <ReportTd align="center">{qa.difficulty ?? '–'}</ReportTd>
                     </ReportTr>
                   );
@@ -1073,6 +1072,73 @@ export default function StudentPrintPage({
               </ReportTable>
             )}
           </ReportSection>
+
+          {/* ── 문항별 세부 유형 분석 ── */}
+          {qaRows.length > 0 && (
+            <ReportSection title="문항별 세부 유형 분석">
+              <p className="text-xs mb-3" style={{ color: 'var(--fg-sub)' }}>
+                각 문항이 어떤 세부 유형을 점검하는지 정리한 항목입니다.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {qaRows.map((qa) => {
+                  const ans = qa.ans;
+                  const isWrong = ans && !ans.is_blank && !ans.is_correct;
+                  const isBlank = ans?.is_blank;
+                  const borderColor = isWrong
+                    ? '#fca5a5'
+                    : isBlank
+                      ? '#fdba74'
+                      : 'var(--border)';
+                  const bgColor = isWrong
+                    ? '#fef2f2'
+                    : isBlank
+                      ? '#fff7ed'
+                      : 'var(--bg-base)';
+                  const majorLabel = qa.major_unit_name ?? null;
+                  const middleLabel = qa.middle_unit_name ?? null;
+                  const smallLabel = qa.small_unit_name ?? null;
+                  const unitPath = [majorLabel, middleLabel].filter(Boolean).join(' > ') || '단원 미설정';
+                  return (
+                    <div
+                      key={qa.id}
+                      className="rounded-lg border px-3 py-2 text-xs"
+                      style={{
+                        background: bgColor,
+                        borderColor,
+                        breakInside: 'avoid',
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-bold text-sm" style={{ color: 'var(--fg-main)' }}>
+                          {qa.question_number}번
+                        </span>
+                        {isWrong && (
+                          <span className="px-1.5 py-0.5 rounded text-red-700 font-semibold" style={{ background: '#fee2e2', fontSize: '10px' }}>
+                            오답
+                          </span>
+                        )}
+                        {isBlank && (
+                          <span className="px-1.5 py-0.5 rounded text-orange-700 font-semibold" style={{ background: '#ffedd5', fontSize: '10px' }}>
+                            미응답
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ color: 'var(--fg-sub)', wordBreak: 'keep-all', overflowWrap: 'break-word', whiteSpace: 'normal' }}>
+                        <span className="font-medium" style={{ color: 'var(--fg-muted)' }}>단원: </span>
+                        {unitPath}
+                      </div>
+                      {smallLabel && (
+                        <div className="mt-0.5" style={{ color: 'var(--fg-sub)', wordBreak: 'keep-all', overflowWrap: 'break-word', whiteSpace: 'normal' }}>
+                          <span className="font-medium" style={{ color: 'var(--fg-muted)' }}>세부 유형: </span>
+                          {smallLabel}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </ReportSection>
+          )}
 
           {questionCommentPoints.length > 0 && (
             <ReportSection title="오답 문항 해설 포인트">
