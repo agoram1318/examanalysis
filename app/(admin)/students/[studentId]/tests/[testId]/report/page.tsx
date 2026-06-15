@@ -4,7 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, BarChart3, AlertCircle, Loader2, ChevronRight,
-  CheckCircle2, XCircle, MinusCircle, FileBarChart, Printer,
+  CheckCircle2, XCircle, MinusCircle, FileBarChart,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { fetchTestsForClass } from '@/lib/class-tests';
@@ -1240,20 +1240,7 @@ export default function StudentReportPage({
             </Button>
           </Link>
           <PrintReportLink href={`/students/${studentId}/tests/${testId}/print`} />
-          <Button variant="accent" size="sm" onClick={() => window.print()}>
-            <Printer size={14} /> 인쇄 / PDF 저장
-          </Button>
         </div>
-      </div>
-
-      {/* 인쇄 안내 (화면에서만 표시) */}
-      <div
-        className="no-print rounded-xl px-4 py-2.5 mb-4 flex items-center gap-2 text-xs"
-        style={{ background: 'var(--accent-lt)', border: '1px solid #fed7aa', color: '#7c2d12' }}
-      >
-        <Printer size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-        인쇄 창에서 대상 프린터를 <strong>&apos;PDF로 저장&apos;</strong>으로 선택하면 PDF 파일로 저장할 수 있습니다.
-        배경 그래픽 옵션을 켜면 색상이 더 잘 출력됩니다.
       </div>
 
       {/* ── 리포트 본문 ── */}
