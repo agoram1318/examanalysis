@@ -369,3 +369,11 @@ ALTER TABLE questions
   ADD CONSTRAINT questions_difficulty_range
   CHECK (difficulty BETWEEN 1 AND 8);
 */
+
+-- ============================================================
+-- MIGRATION: tests 테이블에 difficulty (테스트 대표 난이도) 컬럼 추가
+-- 문항별 난이도가 없을 때 이 값을 리포트에 표시합니다.
+-- Supabase SQL Editor에서 아래 구문을 실행하세요.
+-- ============================================================
+ALTER TABLE public.tests
+  ADD COLUMN IF NOT EXISTS difficulty SMALLINT CHECK (difficulty BETWEEN 1 AND 8);

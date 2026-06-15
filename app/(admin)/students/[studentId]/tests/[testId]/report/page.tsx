@@ -37,6 +37,7 @@ type TestRow = {
   grade: string | null;
   subject_name: string | null;
   exam_range_text: string | null;
+  difficulty: number | null;
 };
 
 type QuestionRow = {
@@ -955,7 +956,7 @@ export default function StudentReportPage({
       // 3. 테스트 (과목 포함)
       const { data: testRaw, error: testErr } = await supabase
         .from('tests')
-        .select('id, title, grade, exam_range_text')
+        .select('id, title, grade, exam_range_text, difficulty')
         .eq('id', testId)
         .single();
 
@@ -971,6 +972,7 @@ export default function StudentReportPage({
         grade:        testRaw.grade,
         subject_name: null,
         exam_range_text: testRaw.exam_range_text ?? null,
+        difficulty: (testRaw as { difficulty?: number | null }).difficulty ?? null,
       });
 
       // 4. 문항 (단원 조인)
@@ -1087,9 +1089,11 @@ export default function StudentReportPage({
   const scoreRate     = totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0;
   const guessRate     = answeredCount > 0 ? (guessedCount / answeredCount) * 100 : 0;
   const difficultyValues = qaRows.map((qa) => qa.difficulty).filter((d): d is number => typeof d === 'number');
-  const averageDifficulty = difficultyValues.length > 0
+  const questionAvgDifficulty = difficultyValues.length > 0
     ? difficultyValues.reduce((sum, d) => sum + d, 0) / difficultyValues.length
     : null;
+  // 문항 평균 → 테스트 직접 설정 → null 순으로 폴백
+  const averageDifficulty = questionAvgDifficulty ?? (test?.difficulty ?? null);
   const difficultySummaryText = difficultySummary(averageDifficulty);
 
   const questionIds = qaRows.map((qa) => qa.id);
@@ -1187,7 +1191,9 @@ export default function StudentReportPage({
       label: '테스트 난이도',
       value: averageDifficulty === null
         ? '난이도 미설정'
-        : `평균 난이도 ${averageDifficulty.toFixed(1)} / 8 · ${difficultySummaryText}`,
+        : questionAvgDifficulty !== null
+          ? `문항 평균 난이도 ${averageDifficulty.toFixed(1)} / 8 · ${difficultySummaryText}`
+          : `대표 난이도 ${averageDifficulty} / 8 · ${difficultySummaryText}`,
     },
     { label: '강사명',   value: cls.teacher_name || '–' },
     { label: '학원명',   value: cls.academy_name || '–' },

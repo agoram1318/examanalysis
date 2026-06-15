@@ -12,11 +12,23 @@ import { formatSubjectList, getQuestionSubjectName } from '@/lib/report-utils';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 
+const DIFFICULTY_OPTIONS: { value: number; label: string }[] = [
+  { value: 1, label: '1 — 난이도 하 (기본확인)' },
+  { value: 2, label: '2 — 난이도 하 (기본확인)' },
+  { value: 3, label: '3 — 난이도 중 (기본적용)' },
+  { value: 4, label: '4 — 난이도 중 (기본적용)' },
+  { value: 5, label: '5 — 난이도 상 (중상변별)' },
+  { value: 6, label: '6 — 난이도 상 (중상변별)' },
+  { value: 7, label: '7 — 난이도 최상 (고난도)' },
+  { value: 8, label: '8 — 난이도 최상 (고난도)' },
+];
+
 type TestRow = {
   id: number;
   title: string;
   grade: string | null;
   exam_range_text: string | null;
+  difficulty: number | null;
   total_questions: number;
   created_at: string;
   subject_names: string[];
@@ -32,14 +44,14 @@ export default function TestsPage() {
 
   // 수정 모달
   const [editTarget, setEditTarget] = useState<TestRow | null>(null);
-  const [editForm, setEditForm] = useState({ title: '', grade: '', exam_range_text: '' });
+  const [editForm, setEditForm] = useState({ title: '', grade: '', exam_range_text: '', difficulty: '' });
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
   const loadTests = useCallback(async () => {
     const { data } = await supabase
       .from('tests')
-      .select('id, title, grade, exam_range_text, total_questions, created_at')
+      .select('id, title, grade, exam_range_text, difficulty, total_questions, created_at')
       .order('created_at', { ascending: false });
     const rows = (data ?? []) as unknown as Omit<TestRow, 'subject_names'>[];
     const testIds = rows.map((test) => test.id);
@@ -74,6 +86,7 @@ export default function TestsPage() {
       title: test.title,
       grade: test.grade ?? '',
       exam_range_text: test.exam_range_text ?? '',
+      difficulty: test.difficulty != null ? String(test.difficulty) : '',
     });
     setEditError(null);
   };
@@ -98,6 +111,7 @@ export default function TestsPage() {
         title: editForm.title.trim(),
         grade: editForm.grade.trim() || null,
         exam_range_text: editForm.exam_range_text.trim() || null,
+        difficulty: editForm.difficulty ? Number(editForm.difficulty) : null,
       })
       .eq('id', editTarget.id);
     setSaving(false);
@@ -389,12 +403,32 @@ export default function TestsPage() {
                 disabled={saving}
               />
             </div>
-          </div>
-          <div
-            className="rounded-lg border px-3 py-2 text-xs"
-            style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--fg-muted)' }}
-          >
-            테스트 난이도는 문항 입력 화면에서 각 문항의 난이도를 설정하면 자동으로 계산됩니다.
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--fg-sub)' }}>
+                테스트 난이도
+              </label>
+              <select
+                value={editForm.difficulty}
+                onChange={(e) => setEditForm((f) => ({ ...f, difficulty: e.target.value }))}
+                disabled={saving}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={{
+                  borderColor: 'var(--border)',
+                  background: 'var(--bg-card)',
+                  color: 'var(--fg-main)',
+                }}
+              >
+                <option value="">미설정 (문항 난이도 평균으로 자동 계산)</option>
+                {DIFFICULTY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs" style={{ color: 'var(--fg-muted)' }}>
+                문항별 난이도가 설정된 경우 자동 평균이 우선 표시되고, 이 값은 문항 난이도가 없을 때만 사용됩니다.
+              </p>
+            </div>
           </div>
           {editError && (
             <p

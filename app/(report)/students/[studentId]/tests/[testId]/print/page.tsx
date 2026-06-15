@@ -692,6 +692,7 @@ export default function StudentPrintPage({
   const [meta, setMeta] = useState<{ label: string; value: string; wide?: boolean }[]>([]);
   const [qaRows, setQaRows] = useState<QA[]>([]);
   const [cohortAnswers, setCohortAnswers] = useState<CohortAnswerRow[]>([]);
+  const [testDifficultyOverride, setTestDifficultyOverride] = useState<number | null>(null);
 
   useEffect(() => {
     if (isNaN(studentId) || isNaN(testId)) {
@@ -732,7 +733,7 @@ export default function StudentPrintPage({
 
       const { data: testRaw } = await supabase
         .from('tests')
-        .select('id, title, grade, exam_range_text')
+        .select('id, title, grade, exam_range_text, difficulty')
         .eq('id', testId)
         .single();
 
@@ -741,6 +742,7 @@ export default function StudentPrintPage({
         setLoading(false);
         return;
       }
+      setTestDifficultyOverride((testRaw as { difficulty?: number | null }).difficulty ?? null);
 
       const { data: questionsRaw } = await supabase
         .from('questions')
@@ -852,16 +854,21 @@ export default function StudentPrintPage({
         100
       : 0;
   const difficultyValues = qaRows.map((qa) => qa.difficulty).filter((d): d is number => typeof d === 'number');
-  const averageDifficulty = difficultyValues.length > 0
+  const questionAvgDifficulty = difficultyValues.length > 0
     ? difficultyValues.reduce((sum, d) => sum + d, 0) / difficultyValues.length
     : null;
+  // 문항 평균 → 테스트 직접 설정 → null 순으로 폴백
+  const averageDifficulty = questionAvgDifficulty ?? testDifficultyOverride;
+  const difficultyLabel = averageDifficulty === null
+    ? '난이도 미설정'
+    : questionAvgDifficulty !== null
+      ? `문항 평균 난이도 ${averageDifficulty.toFixed(1)} / 8 · ${difficultySummary(averageDifficulty)}`
+      : `대표 난이도 ${averageDifficulty} / 8 · ${difficultySummary(averageDifficulty)}`;
   const headerMeta = [
     ...meta,
     {
       label: '테스트 난이도',
-      value: averageDifficulty === null
-        ? '난이도 미설정'
-        : `평균 난이도 ${averageDifficulty.toFixed(1)} / 8 · ${difficultySummary(averageDifficulty)}`,
+      value: difficultyLabel,
       wide: true,
     },
   ];
