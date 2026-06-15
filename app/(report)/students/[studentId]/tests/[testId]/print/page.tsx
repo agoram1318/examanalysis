@@ -733,7 +733,7 @@ export default function StudentPrintPage({
 
       const { data: testRaw } = await supabase
         .from('tests')
-        .select('id, title, grade, exam_range_text, difficulty')
+        .select('id, title, grade, exam_range_text')
         .eq('id', testId)
         .single();
 
@@ -742,7 +742,17 @@ export default function StudentPrintPage({
         setLoading(false);
         return;
       }
-      setTestDifficultyOverride((testRaw as { difficulty?: number | null }).difficulty ?? null);
+      // difficulty 컬럼은 SQL 마이그레이션 후 존재 — 별도 조회로 graceful 처리
+      try {
+        const { data: diffData } = await supabase
+          .from('tests')
+          .select('difficulty')
+          .eq('id', testId)
+          .single();
+        setTestDifficultyOverride((diffData as { difficulty?: number | null })?.difficulty ?? null);
+      } catch {
+        setTestDifficultyOverride(null);
+      }
 
       const { data: questionsRaw } = await supabase
         .from('questions')

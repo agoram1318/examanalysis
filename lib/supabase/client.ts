@@ -22,6 +22,14 @@ function getClient(): SupabaseClient {
     )
   }
 
+  // 연결 대상 프로젝트 host만 로그 (키 값은 출력하지 않음)
+  try {
+    const host = new URL(url).host;
+    console.info('[Supabase] 연결 프로젝트:', host);
+  } catch {
+    console.info('[Supabase] URL 파싱 실패 — NEXT_PUBLIC_SUPABASE_URL 형식을 확인해주세요.');
+  }
+
   _client = _createClient(url, key)
   return _client
 }

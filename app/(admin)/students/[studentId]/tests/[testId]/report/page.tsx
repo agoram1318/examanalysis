@@ -956,7 +956,7 @@ export default function StudentReportPage({
       // 3. 테스트 (과목 포함)
       const { data: testRaw, error: testErr } = await supabase
         .from('tests')
-        .select('id, title, grade, exam_range_text, difficulty')
+        .select('id, title, grade, exam_range_text')
         .eq('id', testId)
         .single();
 
@@ -972,8 +972,24 @@ export default function StudentReportPage({
         grade:        testRaw.grade,
         subject_name: null,
         exam_range_text: testRaw.exam_range_text ?? null,
-        difficulty: (testRaw as { difficulty?: number | null }).difficulty ?? null,
+        difficulty:   null, // difficulty 컬럼은 SQL 마이그레이션 후 사용 가능
       });
+
+      // difficulty 컬럼은 SQL 마이그레이션 후 존재 — 별도 조회로 graceful 처리
+      void (async () => {
+        try {
+          const { data: diffData } = await supabase
+            .from('tests')
+            .select('difficulty')
+            .eq('id', testId)
+            .single();
+          if (diffData) {
+            setTest((prev) => prev ? { ...prev, difficulty: (diffData as { difficulty?: number | null }).difficulty ?? null } : prev);
+          }
+        } catch {
+          // difficulty 컬럼 없으면 null 유지
+        }
+      })();
 
       // 4. 문항 (단원 조인)
       const { data: questionsRaw } = await supabase

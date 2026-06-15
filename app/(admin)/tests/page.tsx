@@ -28,7 +28,6 @@ type TestRow = {
   title: string;
   grade: string | null;
   exam_range_text: string | null;
-  difficulty: number | null;
   total_questions: number;
   created_at: string;
   subject_names: string[];
@@ -37,6 +36,7 @@ type TestRow = {
 export default function TestsPage() {
   const [tests, setTests] = useState<TestRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TestRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -49,10 +49,20 @@ export default function TestsPage() {
   const [editError, setEditError] = useState<string | null>(null);
 
   const loadTests = useCallback(async () => {
-    const { data } = await supabase
+    setLoadError(null);
+    // difficulty 컬럼은 SQL 마이그레이션 후 추가되므로 메인 쿼리에서 제외
+    const { data, error } = await supabase
       .from('tests')
-      .select('id, title, grade, exam_range_text, difficulty, total_questions, created_at')
+      .select('id, title, grade, exam_range_text, total_questions, created_at')
       .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[tests] 목록 조회 실패:', error);
+      setLoadError('테스트 목록을 불러오지 못했습니다. Supabase 연결 또는 권한을 확인해주세요.');
+      setLoading(false);
+      return;
+    }
+
     const rows = (data ?? []) as unknown as Omit<TestRow, 'subject_names'>[];
     const testIds = rows.map((test) => test.id);
     const { data: questionSubjects } = testIds.length > 0
@@ -80,13 +90,27 @@ export default function TestsPage() {
     loadTests();
   }, [loadTests]);
 
-  const openEditModal = (test: TestRow) => {
+  const openEditModal = async (test: TestRow) => {
     setEditTarget(test);
+    // difficulty 컬럼은 SQL 마이그레이션 후 존재하므로 별도 조회 (실패 시 빈값으로 폴백)
+    let difficultyValue = '';
+    try {
+      const { data: diffData } = await supabase
+        .from('tests')
+        .select('difficulty')
+        .eq('id', test.id)
+        .single();
+      if (diffData && (diffData as { difficulty?: number | null }).difficulty != null) {
+        difficultyValue = String((diffData as { difficulty: number }).difficulty);
+      }
+    } catch {
+      // difficulty 컬럼이 없으면 빈값 유지
+    }
     setEditForm({
       title: test.title,
       grade: test.grade ?? '',
       exam_range_text: test.exam_range_text ?? '',
-      difficulty: test.difficulty != null ? String(test.difficulty) : '',
+      difficulty: difficultyValue,
     });
     setEditError(null);
   };
@@ -105,15 +129,26 @@ export default function TestsPage() {
     }
     setSaving(true);
     setEditError(null);
-    const { error } = await supabase
+
+    // difficulty 포함 업데이트 시도
+    const basePayload = {
+      title: editForm.title.trim(),
+      grade: editForm.grade.trim() || null,
+      exam_range_text: editForm.exam_range_text.trim() || null,
+    };
+    const difficultyPayload = editForm.difficulty ? { difficulty: Number(editForm.difficulty) } : { difficulty: null };
+
+    let { error } = await supabase
       .from('tests')
-      .update({
-        title: editForm.title.trim(),
-        grade: editForm.grade.trim() || null,
-        exam_range_text: editForm.exam_range_text.trim() || null,
-        difficulty: editForm.difficulty ? Number(editForm.difficulty) : null,
-      })
+      .update({ ...basePayload, ...difficultyPayload })
       .eq('id', editTarget.id);
+
+    // difficulty 컬럼이 없는 경우(마이그레이션 미실행) difficulty 제외 후 재시도
+    if (error && error.message?.includes('difficulty')) {
+      console.warn('[tests] difficulty 컬럼 없음 — difficulty 제외하고 저장합니다. SQL 마이그레이션을 실행해 주세요.');
+      ({ error } = await supabase.from('tests').update(basePayload).eq('id', editTarget.id));
+    }
+
     setSaving(false);
     if (error) {
       setEditError(`저장에 실패했습니다. ${error.message}`);
@@ -223,12 +258,22 @@ export default function TestsPage() {
         </div>
       )}
 
+      {/* ── 조회 에러 ── */}
+      {loadError && (
+        <div
+          className="rounded-xl border px-4 py-3 text-sm leading-relaxed"
+          style={{ background: '#fef2f2', borderColor: '#fca5a5', color: '#dc2626' }}
+        >
+          {loadError}
+        </div>
+      )}
+
       {/* ── 로딩 ── */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 size={22} className="animate-spin" style={{ color: 'var(--fg-muted)' }} />
         </div>
-      ) : tests.length === 0 ? (
+      ) : loadError ? null : tests.length === 0 ? (
         <Card>
           <CardContent className="text-center py-16">
             <ClipboardList
