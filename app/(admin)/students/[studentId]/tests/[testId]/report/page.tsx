@@ -91,18 +91,18 @@ function evalLabel(rate: number): { text: string; color: string; bg: string } {
 
 function difficultyLabel(d: number | null): string {
   if (d === null) return '–';
-  if (d <= 2) return `${d} (기본 확인)`;
-  if (d <= 4) return `${d} (기본 적용)`;
-  if (d <= 6) return `${d} (중상 난도)`;
-  return `${d} (고난도/킬러)`;
+  if (d <= 2) return `${d} (하)`;
+  if (d <= 4) return `${d} (중)`;
+  if (d <= 6) return `${d} (상)`;
+  return `${d} (최상)`;
 }
 
 function difficultyGroup(d: number | null): string {
   if (d === null) return '미설정';
-  if (d <= 2) return '기본 확인 (1~2)';
-  if (d <= 4) return '기본 적용 (3~4)';
-  if (d <= 6) return '중상 난도 (5~6)';
-  return '고난도/킬러 (7~8)';
+  if (d <= 2) return '난이도 하 (1~2)';
+  if (d <= 4) return '난이도 중 (3~4)';
+  if (d <= 6) return '난이도 상 (5~6)';
+  return '난이도 최상 (7~8)';
 }
 
 function questionFormatLabel(format: QuestionRow['question_format']): string {
@@ -111,10 +111,10 @@ function questionFormatLabel(format: QuestionRow['question_format']): string {
 
 function difficultySummary(avg: number | null): string {
   if (avg === null) return '난이도 미설정';
-  if (avg <= 2) return '기본 확인 중심';
-  if (avg <= 4) return '기본 적용 중심';
-  if (avg <= 6) return '중상 난도 중심';
-  return '고난도/킬러 중심';
+  if (avg <= 2) return '난이도 하 중심';
+  if (avg <= 4) return '난이도 중 중심';
+  if (avg <= 6) return '난이도 상 중심';
+  return '난이도 최상 중심';
 }
 
 function curriculumCompare(a: QuestionRow, b: QuestionRow): number {
@@ -405,7 +405,7 @@ function buildPrescriptions(
     lines.push('정답률이 안정적인 단원은 유지 학습을 하고, 틀린 문항의 풀이 흐름만 다시 확인하세요.');
   }
 
-  if (weakestDiff && /5~6|7~8|중상|고난/.test(weakestDiff.name)) {
+  if (weakestDiff && /5~6|7~8/.test(weakestDiff.name)) {
     lines.push(`${cleanStatName(weakestDiff.name)} 문항은 풀이 전 조건을 정리하고 접근 방향을 쓰는 훈련이 필요합니다.`);
   } else if (weakestDiff) {
     lines.push(`${cleanStatName(weakestDiff.name)} 문항은 개념 확인 후 같은 난이도의 유사 문항으로 정확도를 높여 주세요.`);
@@ -1128,7 +1128,7 @@ export default function StudentReportPage({
   );
   // 난이도별
   const diffStats = groupStats(qaRows, (qa) => difficultyGroup(qa.difficulty));
-  const DIFF_ORDER = ['기본 확인 (1~2)', '기본 적용 (3~4)', '중상 난도 (5~6)', '고난도/킬러 (7~8)', '미설정'];
+  const DIFF_ORDER = ['난이도 하 (1~2)', '난이도 중 (3~4)', '난이도 상 (5~6)', '난이도 최상 (7~8)', '미설정'];
   const diffStatsSorted = [...diffStats].sort(
     (a, b) => DIFF_ORDER.indexOf(a.name) - DIFF_ORDER.indexOf(b.name)
   );

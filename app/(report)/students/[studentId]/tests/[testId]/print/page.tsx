@@ -101,10 +101,10 @@ function cleanStatName(name: string): string {
 
 function difficultySummary(avg: number | null): string {
   if (avg === null) return '난이도 미설정';
-  if (avg <= 2) return '기본 확인 중심';
-  if (avg <= 4) return '기본 적용 중심';
-  if (avg <= 6) return '중상 난도 중심';
-  return '고난도/킬러 중심';
+  if (avg <= 2) return '난이도 하 중심';
+  if (avg <= 4) return '난이도 중 중심';
+  if (avg <= 6) return '난이도 상 중심';
+  return '난이도 최상 중심';
 }
 
 function questionFormatLabel(format: QA['question_format']): string {
@@ -200,7 +200,7 @@ function buildPrescriptions(
     lines.push('정답률이 안정적인 단원은 유지 학습을 하고, 틀린 문항의 풀이 흐름만 다시 확인하세요.');
   }
 
-  if (weakestDiff && /5~6|7~8|중상|고난/.test(weakestDiff.name)) {
+  if (weakestDiff && /5~6|7~8/.test(weakestDiff.name)) {
     lines.push(`${cleanStatName(weakestDiff.name)} 문항은 풀이 전 조건을 정리하고 접근 방향을 쓰는 훈련이 필요합니다.`);
   } else if (weakestDiff) {
     lines.push(`${cleanStatName(weakestDiff.name)} 문항은 개념 확인 후 같은 난이도의 유사 문항으로 정확도를 높여 주세요.`);
@@ -687,7 +687,7 @@ export default function StudentPrintPage({
   const [studentName, setStudentName] = useState('');
   const [studentCode, setStudentCode] = useState<string | null>(null);
   const [classId, setClassId] = useState(0);
-  const [meta, setMeta] = useState<{ label: string; value: string }[]>([]);
+  const [meta, setMeta] = useState<{ label: string; value: string; wide?: boolean }[]>([]);
   const [qaRows, setQaRows] = useState<QA[]>([]);
   const [cohortAnswers, setCohortAnswers] = useState<CohortAnswerRow[]>([]);
 
@@ -789,10 +789,10 @@ export default function StudentPrintPage({
         { label: '테스트명', value: testRaw.title },
         { label: '학년', value: testRaw.grade || '–' },
         { label: '과목', value: formatSubjectList(questions.map((q) => q.subject_name)) },
-        { label: '테스트 범위', value: testRaw.exam_range_text?.trim() || '범위 미입력' },
         { label: '강사명', value: classData?.teacher_name || '–' },
         { label: '학원명', value: classData?.academy_name || '–' },
         { label: '반명', value: classData?.class_name || '–' },
+        { label: '테스트 범위', value: testRaw.exam_range_text?.trim() || '범위 미입력', wide: true },
       ]);
 
       const { data: answersRaw } = await supabase
@@ -860,6 +860,7 @@ export default function StudentPrintPage({
       value: averageDifficulty === null
         ? '난이도 미설정'
         : `평균 난이도 ${averageDifficulty.toFixed(1)} / 8 · ${difficultySummary(averageDifficulty)}`,
+      wide: true,
     },
   ];
 
@@ -945,14 +946,15 @@ export default function StudentPrintPage({
           <ReportSection title="종합 결과">
             <div className="grid grid-cols-[120px_1fr] gap-2">
               <AccuracyGauge rate={scoreRate} correct={correctCount} total={qaRows.length} />
-              <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
                 <MiniSummaryCard label="총점" value={`${formatScoreValue(totalScore)} / ${formatScoreValue(totalPossible)}점`} sub="획득 점수" accent />
-                <MiniSummaryCard label="전체 응시자 평균점수" value={cohortAverage === null ? '산출 전' : `${formatScoreValue(cohortAverage)}점`} />
-                <MiniSummaryCard label="취약 단원" value={weakestUnit ? cleanStatName(weakestUnit.name) : '–'} sub={correctRateText(weakestUnit)} />
-                <MiniSummaryCard label="보완 난이도" value={weakestDiff ? cleanStatName(weakestDiff.name) : '–'} sub={correctRateText(weakestDiff)} />
+                <div className="grid grid-cols-2 gap-2">
+                  <MiniSummaryCard label="취약 단원" value={weakestUnit ? cleanStatName(weakestUnit.name) : '–'} sub={correctRateText(weakestUnit)} />
+                  <MiniSummaryCard label="보완 난이도" value={weakestDiff ? cleanStatName(weakestDiff.name) : '–'} sub={correctRateText(weakestDiff)} />
+                </div>
               </div>
             </div>
-            <div className="mt-2 grid grid-cols-3 gap-1.5">
+            <div className="mt-2 grid grid-cols-4 gap-1.5">
               {[
                 ['정답 수', `${correctCount}개`],
                 ['오답 수', `${wrongCount}개`],
@@ -963,6 +965,17 @@ export default function StudentPrintPage({
                   <p className="text-xs font-bold text-stone-950">{value}</p>
                 </div>
               ))}
+              <div className="rounded border bg-stone-50 px-2 py-1.5" style={{ borderColor: 'var(--border)' }}>
+                <p className="text-[10px] text-stone-500">전체 평균</p>
+                <p className="text-xs font-bold text-stone-950">
+                  {completedStudentScores.length > 1 && cohortAverage !== null
+                    ? `${formatScoreValue(cohortAverage)}점`
+                    : '산출 전'}
+                </p>
+                {completedStudentScores.length > 1 && (
+                  <p className="text-[9px] text-stone-400">{completedStudentScores.length}명 기준</p>
+                )}
+              </div>
             </div>
           </ReportSection>
 

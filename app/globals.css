@@ -111,8 +111,8 @@ body {
   margin-top: 1rem;
 }
 
-.report-header-meta-label { font-size: 0.65rem; opacity: 0.5; margin-right: 0.35rem; }
-.report-header-meta-value { font-size: 0.8rem; font-weight: 500; opacity: 0.9; }
+.report-header-meta-label { font-size: 0.65rem; opacity: 0.5; margin-right: 0.35rem; white-space: nowrap; }
+.report-header-meta-value { font-size: 0.8rem; font-weight: 500; opacity: 0.9; word-break: keep-all; overflow-wrap: break-word; }
 
 .report-header-date {
   margin-top: 0.75rem;
@@ -328,7 +328,7 @@ body {
 
   @page {
     size: A4 portrait;
-    margin: 14mm 11mm;
+    margin: 12mm 10mm;
   }
 
   .no-print,
@@ -345,7 +345,12 @@ body {
     color: #1a1f2e !important;
     margin: 0 !important;
     padding: 0 !important;
+    overflow-x: hidden !important;
   }
+
+  /* 스크롤바 숨김 */
+  ::-webkit-scrollbar { display: none !important; }
+  * { scrollbar-width: none !important; }
 
   .admin-main {
     margin-left: 0 !important;
@@ -355,6 +360,9 @@ body {
   * { box-shadow: none !important; text-shadow: none !important; }
 
   a { text-decoration: none !important; color: inherit !important; }
+
+  /* 버튼·링크·관리자 이동 영역 숨김 */
+  button, [role="button"] { display: none !important; }
 
   .report-print-root {
     padding: 0 !important;
@@ -397,6 +405,18 @@ body {
     break-after: page !important;
   }
 
+  /* 테이블 페이지 너비 초과 방지 */
+  .report-table-wrap {
+    overflow: visible !important;
+    max-width: 100% !important;
+    border-radius: 0 !important;
+  }
+
+  table {
+    max-width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
   .report-table { page-break-inside: auto; }
   .report-table thead { display: table-header-group; }
   .report-table tbody tr,
@@ -405,7 +425,6 @@ body {
     page-break-inside: avoid !important;
   }
 
-  table { border-collapse: collapse !important; }
   .report-table th,
   .report-table td,
   table th,

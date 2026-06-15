@@ -51,33 +51,33 @@ export function evalAchievement(rate: number): { text: string; color: string; bg
 
 export function difficultyGroup(d: number | null): string {
   if (d === null) return '미설정';
-  if (d <= 2) return '기본 확인 (1~2)';
-  if (d <= 4) return '기본 적용 (3~4)';
-  if (d <= 6) return '중상 난도 (5~6)';
-  return '고난도/킬러 (7~8)';
+  if (d <= 2) return '난이도 하 (1~2)';
+  if (d <= 4) return '난이도 중 (3~4)';
+  if (d <= 6) return '난이도 상 (5~6)';
+  return '난이도 최상 (7~8)';
 }
 
 export function difficultyLabel(d: number | null): string {
   if (d === null) return '–';
-  if (d <= 2) return `${d} (기본)`;
-  if (d <= 4) return `${d} (적용)`;
-  if (d <= 6) return `${d} (중상)`;
-  return `${d} (고난도)`;
+  if (d <= 2) return `${d} (하)`;
+  if (d <= 4) return `${d} (중)`;
+  if (d <= 6) return `${d} (상)`;
+  return `${d} (최상)`;
 }
 
 export function difficultyInterpretation(d: number | null): string {
   if (d === null) return '미설정';
-  if (d <= 2) return '기본 확인';
-  if (d <= 4) return '기본 적용';
-  if (d <= 6) return '중상 난도';
-  return '고난도/킬러';
+  if (d <= 2) return '난이도 하';
+  if (d <= 4) return '난이도 중';
+  if (d <= 6) return '난이도 상';
+  return '난이도 최상';
 }
 
 export const DIFF_ORDER = [
-  '기본 확인 (1~2)',
-  '기본 적용 (3~4)',
-  '중상 난도 (5~6)',
-  '고난도/킬러 (7~8)',
+  '난이도 하 (1~2)',
+  '난이도 중 (3~4)',
+  '난이도 상 (5~6)',
+  '난이도 최상 (7~8)',
   '미설정',
 ];
 
