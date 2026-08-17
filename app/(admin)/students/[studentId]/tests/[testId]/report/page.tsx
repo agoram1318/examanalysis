@@ -144,7 +144,7 @@ type FeatureFocus = {
 };
 
 function getQuestionStatus(qa: QA): QuestionStatus | null {
-  if (!qa.ans || qa.ans.is_blank || !qa.ans.selected_answer) return 'blank';
+  if (!qa.ans || qa.ans.is_blank) return 'blank';
   if (qa.ans.is_guessed && qa.ans.is_correct) return 'guessed_correct';
   if (qa.ans.is_guessed && !qa.ans.is_correct) return 'guessed_wrong';
   if (!qa.ans.is_correct) return 'wrong';
@@ -352,7 +352,7 @@ function buildCauseStats(qaRows: QA[]): CauseStat[] {
 
     const comment = qa.question_comment?.trim() ?? '';
     let name = '단원 개념 보완';
-    if (qa.ans?.is_blank || !qa.ans?.selected_answer) name = '미응답/시간 관리';
+    if (!qa.ans || qa.ans.is_blank) name = '미응답/시간 관리';
     else if (qa.ans?.is_guessed) name = '찍음/확신 부족';
     else if (/조건|해석|식\s*정리|풀이\s*방향/.test(comment)) name = '조건 해석/풀이 방향';
     else if (qa.difficulty !== null && qa.difficulty >= 5) name = '난이도 대응 부족';
@@ -429,7 +429,7 @@ function buildPrescriptions(
 function generateComment(qaRows: QA[], totalScore: number, totalPossible: number): string {
   const parts: string[] = [];
   const scoreRate = totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0;
-  const answered = qaRows.filter((qa) => qa.ans && !qa.ans.is_blank && qa.ans.selected_answer).length;
+  const answered = qaRows.filter((qa) => qa.ans && !qa.ans.is_blank).length;
   const guessedCount = qaRows.filter((qa) => qa.ans?.is_guessed).length;
   const guessedCorrect = qaRows.filter((qa) => qa.ans?.is_guessed && qa.ans?.is_correct).length;
   const guessRate = answered > 0 ? (guessedCount / answered) * 100 : 0;
@@ -468,7 +468,7 @@ function generateComment(qaRows: QA[], totalScore: number, totalPossible: number
 
   // 후반 미응답
   const lastQ = qaRows.slice(Math.floor(qaRows.length * 0.75));
-  const blankAtEnd = lastQ.filter((qa) => qa.ans?.is_blank || !qa.ans?.selected_answer).length;
+  const blankAtEnd = lastQ.filter((qa) => !qa.ans || qa.ans.is_blank).length;
   if (blankAtEnd >= 2) {
     parts.push('시간 배분 훈련과 변별 문항 접근 전략이 필요합니다.');
   }
@@ -821,7 +821,7 @@ function QuestionTimeline({ qaRows }: { qaRows: QA[] }) {
       <div className="flex flex-wrap gap-2">
         {qaRows.map((qa) => {
           const ans = qa.ans;
-          const hasAnswer = ans && !ans.is_blank && ans.selected_answer;
+          const hasAnswer = ans && !ans.is_blank;
           const bg = !hasAnswer ? '#e2e8f0' : ans.is_correct ? '#dcfce7' : '#fee2e2';
           const color = !hasAnswer ? '#64748b' : ans.is_correct ? '#15803d' : '#dc2626';
           return (
@@ -852,7 +852,7 @@ function QuestionAnalysisGraph({
           const rateInfo = questionRates.get(qa.id);
           const rate = rateInfo?.correctRate ?? null;
           const ans = qa.ans;
-          const hasAnswer = ans && !ans.is_blank && ans.selected_answer;
+          const hasAnswer = ans && !ans.is_blank;
           const statusLabel = !hasAnswer ? '미응답' : ans.is_correct ? '정답' : '오답';
           const statusColor = !hasAnswer ? '#64748b' : ans.is_correct ? '#16a34a' : '#dc2626';
           const highDifficulty = (qa.difficulty ?? 0) >= 6;
@@ -1096,12 +1096,12 @@ export default function StudentReportPage({
   const totalPossible = qaRows.reduce((s, qa) => s + qa.score, 0);
   const totalScore    = qaRows.reduce((s, qa) => s + (qa.ans?.earned_score ?? 0), 0);
   const correctCount  = qaRows.filter((qa) => qa.ans?.is_correct).length;
-  const wrongCount    = qaRows.filter((qa) => qa.ans && !qa.ans.is_correct && !qa.ans.is_blank && qa.ans.selected_answer).length;
-  const blankCount    = qaRows.filter((qa) => !qa.ans || qa.ans.is_blank || !qa.ans.selected_answer).length;
+  const wrongCount    = qaRows.filter((qa) => qa.ans && !qa.ans.is_correct && !qa.ans.is_blank).length;
+  const blankCount    = qaRows.filter((qa) => !qa.ans || qa.ans.is_blank).length;
   const guessedCount  = qaRows.filter((qa) => qa.ans?.is_guessed).length;
   const guessedCorrect = qaRows.filter((qa) => qa.ans?.is_guessed && qa.ans?.is_correct).length;
   const guessedWrong  = qaRows.filter((qa) => qa.ans?.is_guessed && !qa.ans?.is_correct).length;
-  const answeredCount = qaRows.filter((qa) => qa.ans && !qa.ans.is_blank && qa.ans.selected_answer).length;
+  const answeredCount = qaRows.filter((qa) => qa.ans && !qa.ans.is_blank).length;
   const scoreRate     = totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0;
   const guessRate     = answeredCount > 0 ? (guessedCount / answeredCount) * 100 : 0;
   const difficultyValues = qaRows.map((qa) => qa.difficulty).filter((d): d is number => typeof d === 'number');
@@ -1621,7 +1621,7 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
           <tbody>
             {qaRows.map((qa, i) => {
               const ans = qa.ans;
-              const hasAnswer = ans && !ans.is_blank && ans.selected_answer;
+              const hasAnswer = ans && !ans.is_blank;
               const rowBg = i % 2 === 0 ? 'var(--bg-card)' : '#fafaf9';
 
               return (
@@ -1675,7 +1675,7 @@ function QuestionTable({ qaRows }: { qaRows: QA[] }) {
 
                   {/* 결과 */}
                   <td className="px-3 py-2 text-center">
-                    {!ans || (!ans.is_blank && !ans.selected_answer) ? (
+                    {!ans ? (
                       <MinusCircle size={15} className="mx-auto" style={{ color: 'var(--fg-muted)' }} />
                     ) : ans.is_blank ? (
                       <MinusCircle size={15} className="mx-auto" style={{ color: '#94a3b8' }} />

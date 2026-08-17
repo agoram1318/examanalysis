@@ -489,10 +489,10 @@ export function analyzeStudentPerformance(qaRows: QAInput[]): AnalysisData {
   const scoreRate = totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0;
 
   const wrongQAs = qaRows.filter(
-    (qa) => qa.ans && !qa.ans.is_correct && !qa.ans.is_blank && !!qa.ans.selected_answer,
+    (qa) => qa.ans && !qa.ans.is_correct && !qa.ans.is_blank,
   );
   const blankQAs = qaRows.filter(
-    (qa) => !qa.ans || qa.ans.is_blank || !qa.ans.selected_answer,
+    (qa) => !qa.ans || qa.ans.is_blank,
   );
 
   const tier: 'high' | 'mid' | 'low' =

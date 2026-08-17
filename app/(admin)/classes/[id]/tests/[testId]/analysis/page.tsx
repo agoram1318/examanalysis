@@ -131,7 +131,7 @@ function generateClassComment(d: AnalysisData): string {
   const lastQ = d.questions.slice(Math.floor(d.questions.length * 0.75));
   const lastQIds = new Set(lastQ.map((q) => q.id));
   const blankAtEnd = d.allAnswers.filter(
-    (a) => lastQIds.has(a.question_id) && (a.is_blank || !a.selected_answer)
+    (a) => lastQIds.has(a.question_id) && a.is_blank
   ).length;
   const maxBlankAtEnd = lastQ.length * d.studentCount;
   if (maxBlankAtEnd > 0 && blankAtEnd / maxBlankAtEnd >= 0.25) {
@@ -308,12 +308,12 @@ export default function ClassAnalysisPage({
     const answers = allAnswers.filter((a) => a.student_id === s.id);
     const totalScore    = answers.reduce((sum, a) => sum + a.earned_score, 0);
     const correctCount  = answers.filter((a) => a.is_correct).length;
-    const blankCount    = answers.filter((a) => a.is_blank || !a.selected_answer).length;
+    const blankCount    = answers.filter((a) => a.is_blank).length;
     const wrongCount    = answers.length - correctCount - blankCount;
     const guessedCount  = answers.filter((a) => a.is_guessed).length;
     const guessedCorrect = answers.filter((a) => a.is_guessed && a.is_correct).length;
     const guessedWrong  = answers.filter((a) => a.is_guessed && !a.is_correct).length;
-    const answeredCount = answers.filter((a) => !a.is_blank && a.selected_answer).length;
+    const answeredCount = answers.filter((a) => !a.is_blank).length;
     const totalPossible = questions.reduce((sum, q) => sum + q.score, 0);
     const scoreRate     = totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0;
     return { student: s, totalScore, totalPossible, correctCount, wrongCount, blankCount, guessedCount, guessedCorrect, guessedWrong, answeredCount, scoreRate };
@@ -326,7 +326,7 @@ export default function ClassAnalysisPage({
   const minScore      = scores.length ? Math.min(...scores) : 0;
   const avgRate       = totalPossible > 0 ? (avgScore / totalPossible) * 100 : 0;
   const totalGuessed  = allAnswers.filter((a) => a.is_guessed).length;
-  const totalBlank    = allAnswers.filter((a) => a.is_blank || !a.selected_answer).length;
+  const totalBlank    = allAnswers.filter((a) => a.is_blank).length;
   const avgGuessRate  = (() => {
     const rates = studentStats.map((s) =>
       s.answeredCount > 0 ? (s.guessedCount / s.answeredCount) * 100 : 0
@@ -338,7 +338,7 @@ export default function ClassAnalysisPage({
   const qStats = questions.map((q) => {
     const ans = allAnswers.filter((a) => a.question_id === q.id);
     const correctCount  = ans.filter((a) => a.is_correct).length;
-    const blankCount    = ans.filter((a) => a.is_blank || !a.selected_answer).length;
+    const blankCount    = ans.filter((a) => a.is_blank).length;
     const wrongCount    = ans.length - correctCount - blankCount;
     const guessedCount  = ans.filter((a) => a.is_guessed).length;
     const n             = students.length;

@@ -176,10 +176,10 @@ export default function ClassPrintPage({
       const answers = allAnswers.filter((a) => a.student_id === s.id);
       const totalScore = answers.reduce((sum, a) => sum + a.earned_score, 0);
       const correctCount = answers.filter((a) => a.is_correct).length;
-      const blankCount = answers.filter((a) => a.is_blank || !a.selected_answer).length;
+      const blankCount = answers.filter((a) => a.is_blank).length;
       const wrongCount = answers.length - correctCount - blankCount;
       const guessedCount = answers.filter((a) => a.is_guessed).length;
-      const answeredCount = answers.filter((a) => !a.is_blank && a.selected_answer).length;
+      const answeredCount = answers.filter((a) => !a.is_blank).length;
       const scoreRate = totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0;
       return {
         student: s,
@@ -199,7 +199,7 @@ export default function ClassPrintPage({
   const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
   const avgRate = totalPossible > 0 ? (avgScore / totalPossible) * 100 : 0;
   const totalGuessed = allAnswers.filter((a) => a.is_guessed).length;
-  const totalBlank = allAnswers.filter((a) => a.is_blank || !a.selected_answer).length;
+  const totalBlank = allAnswers.filter((a) => a.is_blank).length;
   const avgGuessRate = (() => {
     const rates = studentStats.map((s) =>
       s.answeredCount > 0 ? (s.guessedCount / s.answeredCount) * 100 : 0
@@ -210,7 +210,7 @@ export default function ClassPrintPage({
   const qStats = questions.map((q) => {
     const ans = allAnswers.filter((a) => a.question_id === q.id);
     const correctCount = ans.filter((a) => a.is_correct).length;
-    const blankCount = ans.filter((a) => a.is_blank || !a.selected_answer).length;
+    const blankCount = ans.filter((a) => a.is_blank).length;
     const wrongCount = ans.length - correctCount - blankCount;
     const guessedCount = ans.filter((a) => a.is_guessed).length;
     const n = students.length;

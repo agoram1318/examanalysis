@@ -51,6 +51,7 @@ type AnswerForm = {
 };
 
 type AnswerMap = Record<number, AnswerForm>; // key: question.id
+type GradingMode = 'quick' | 'detailed';
 
 // ─────────────────────────────────────────────
 // 상수 및 헬퍼
@@ -61,11 +62,41 @@ function defaultForm(): AnswerForm {
   return { selected_answer: '', is_correct: false, is_guessed: false, is_blank: false };
 }
 
+function correctForm(question: QuestionRow): AnswerForm {
+  return {
+    selected_answer: question.question_format === 'objective' ? (question.answer ?? '').trim() : '',
+    is_correct: true,
+    is_guessed: false,
+    is_blank: false,
+  };
+}
+
 function computeResult(form: AnswerForm, score: number) {
-  if (form.is_blank || !form.selected_answer.trim()) {
+  if (form.is_blank) {
     return { is_correct: false, earned_score: 0 };
   }
   return { is_correct: form.is_correct, earned_score: form.is_correct ? score : 0 };
+}
+
+function parseQuestionNumbers(value: string, validNumbers: Set<number>) {
+  const numbers = new Set<number>();
+  const invalid: string[] = [];
+
+  value
+    .split(/[\s,]+/)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .forEach((token) => {
+      const number = Number(token);
+      if (Number.isInteger(number) && validNumbers.has(number)) numbers.add(number);
+      else invalid.push(token);
+    });
+
+  return { numbers, invalid };
+}
+
+function formatQuestionNumbers(numbers: number[]) {
+  return numbers.sort((a, b) => a - b).join(', ');
 }
 
 function questionFormatLabel(format: QuestionRow['question_format']): string {
@@ -114,6 +145,12 @@ export default function AnswersPage({
   const [saving, setSaving]               = useState(false);
   const [saveError, setSaveError]         = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess]     = useState(false);
+  const [gradingMode, setGradingMode]     = useState<GradingMode>('quick');
+  const [wrongInput, setWrongInput]       = useState('');
+  const [blankInput, setBlankInput]       = useState('');
+  const [wrongInputError, setWrongInputError] = useState<string | null>(null);
+  const [blankInputError, setBlankInputError] = useState<string | null>(null);
+  const [navigationMessage, setNavigationMessage] = useState<string | null>(null);
 
   // ── 학생별 답안 개수 새로고침
   const reloadCounts = useCallback(
@@ -223,6 +260,7 @@ export default function AnswersPage({
     setAnswersLoading(true);
     setSaveError(null);
     setSaveSuccess(false);
+    setNavigationMessage(null);
 
     const questionIds = questions.map((q) => q.id);
 
@@ -233,7 +271,7 @@ export default function AnswersPage({
       .in('question_id', questionIds)
       .then(({ data }) => {
         const map: AnswerMap = {};
-        questions.forEach((q) => { map[q.id] = defaultForm(); });
+        questions.forEach((q) => { map[q.id] = correctForm(q); });
         (data ?? []).forEach((row) => {
           map[row.question_id] = {
             selected_answer: row.selected_answer ?? '',
@@ -243,6 +281,21 @@ export default function AnswersPage({
           };
         });
         setAnswerMap(map);
+        const questionById = new Map(questions.map((q) => [q.id, q]));
+        setWrongInput(formatQuestionNumbers(
+          (data ?? [])
+            .filter((row) => !row.is_correct && !row.is_blank)
+            .map((row) => questionById.get(row.question_id)?.question_number)
+            .filter((number): number is number => number !== undefined)
+        ));
+        setBlankInput(formatQuestionNumbers(
+          (data ?? [])
+            .filter((row) => row.is_blank)
+            .map((row) => questionById.get(row.question_id)?.question_number)
+            .filter((number): number is number => number !== undefined)
+        ));
+        setWrongInputError(null);
+        setBlankInputError(null);
         setAnswersLoading(false);
       });
   }, [selectedStudentId, questions]);
@@ -266,29 +319,94 @@ export default function AnswersPage({
     []
   );
 
-  // ── 저장 (DELETE → INSERT)
+  const syncQuickInputs = useCallback((map: AnswerMap) => {
+    setWrongInput(formatQuestionNumbers(
+      questions.filter((q) => map[q.id] && !map[q.id].is_correct && !map[q.id].is_blank)
+        .map((q) => q.question_number)
+    ));
+    setBlankInput(formatQuestionNumbers(
+      questions.filter((q) => map[q.id]?.is_blank).map((q) => q.question_number)
+    ));
+    setWrongInputError(null);
+    setBlankInputError(null);
+  }, [questions]);
+
+  const setQuickStatus = useCallback((question: QuestionRow, status: 'correct' | 'wrong' | 'blank') => {
+    const current = answerMap[question.id] ?? correctForm(question);
+    const next = { ...answerMap };
+    next[question.id] = status === 'correct'
+      ? correctForm(question)
+      : status === 'blank'
+        ? { ...current, selected_answer: '', is_correct: false, is_blank: true }
+        : {
+            ...current,
+            selected_answer: current.is_correct ? '' : current.selected_answer,
+            is_correct: false,
+            is_blank: false,
+          };
+    setAnswerMap(next);
+    syncQuickInputs(next);
+    setSaveSuccess(false);
+    setNavigationMessage(null);
+  }, [answerMap, syncQuickInputs]);
+
+  const applyQuickInput = useCallback((kind: 'wrong' | 'blank', value: string) => {
+    const validNumbers = new Set(questions.map((q) => q.question_number));
+    const { numbers, invalid } = parseQuestionNumbers(value, validNumbers);
+    if (kind === 'wrong') {
+      setWrongInput(value);
+      setWrongInputError(invalid.length ? `존재하지 않는 문항: ${invalid.join(', ')}` : null);
+    } else {
+      setBlankInput(value);
+      setBlankInputError(invalid.length ? `존재하지 않는 문항: ${invalid.join(', ')}` : null);
+    }
+
+    const next = { ...answerMap };
+    questions.forEach((question) => {
+      const current = next[question.id] ?? correctForm(question);
+      const isCurrentKind = kind === 'wrong'
+        ? !current.is_correct && !current.is_blank
+        : current.is_blank;
+      const shouldSelect = numbers.has(question.question_number);
+
+      if (shouldSelect) {
+        next[question.id] = kind === 'blank'
+          ? { ...current, selected_answer: '', is_correct: false, is_blank: true }
+          : {
+              ...current,
+              selected_answer: current.is_correct ? '' : current.selected_answer,
+              is_correct: false,
+              is_blank: false,
+            };
+      } else if (isCurrentKind) {
+        next[question.id] = correctForm(question);
+      }
+    });
+
+    const otherNumbers = questions
+      .filter((question) => {
+        const form = next[question.id];
+        return kind === 'wrong'
+          ? form?.is_blank
+          : form && !form.is_correct && !form.is_blank;
+      })
+      .map((question) => question.question_number);
+    if (kind === 'wrong') setBlankInput(formatQuestionNumbers(otherNumbers));
+    else setWrongInput(formatQuestionNumbers(otherNumbers));
+    setAnswerMap(next);
+    setSaveSuccess(false);
+    setNavigationMessage(null);
+  }, [answerMap, questions]);
+
+  // ── 저장 (전체 문항을 동일한 student_answers 구조로 upsert)
   const handleSave = useCallback(async () => {
-    if (!selectedStudentId || !questions.length) return;
+    if (!selectedStudentId || !questions.length || answersLoading) return false;
     setSaveError(null);
     setSaveSuccess(false);
     setSaving(true);
 
-    const questionIds = questions.map((q) => q.id);
-
-    const { error: delErr } = await supabase
-      .from('student_answers')
-      .delete()
-      .eq('student_id', selectedStudentId)
-      .in('question_id', questionIds);
-
-    if (delErr) {
-      setSaveError(`기존 답안 삭제 실패: ${delErr.message}`);
-      setSaving(false);
-      return;
-    }
-
     const rows = questions.map((q) => {
-      const form = answerMap[q.id] ?? defaultForm();
+      const form = answerMap[q.id] ?? correctForm(q);
       const { is_correct, earned_score } = computeResult(form, q.score);
       return {
         student_id:      selectedStudentId,
@@ -303,12 +421,12 @@ export default function AnswersPage({
 
     const { error: insErr } = await supabase
       .from('student_answers')
-      .insert(rows);
+      .upsert(rows, { onConflict: 'student_id,question_id' });
 
     if (insErr) {
       setSaveError(`저장 실패: ${insErr.message}`);
       setSaving(false);
-      return;
+      return false;
     }
 
     setAnswerCounts((prev) => ({
@@ -317,41 +435,44 @@ export default function AnswersPage({
     }));
     setSaveSuccess(true);
     setSaving(false);
-  }, [selectedStudentId, questions, answerMap]);
+    return true;
+  }, [selectedStudentId, questions, answerMap, answersLoading]);
 
   // ── 저장 후 다음 학생
   const handleSaveAndNext = useCallback(async () => {
-    await handleSave();
-    setSelectedStudentId((prev) => {
-      const idx = students.findIndex((s) => s.id === prev);
-      return idx >= 0 && idx < students.length - 1
-        ? students[idx + 1].id
-        : prev;
-    });
-  }, [handleSave, students]);
+    const saved = await handleSave();
+    if (!saved) return;
+    const idx = students.findIndex((s) => s.id === selectedStudentId);
+    if (idx < 0 || idx >= students.length - 1) {
+      setNavigationMessage('마지막 학생입니다.');
+      return;
+    }
+    setSelectedStudentId(students[idx + 1].id);
+  }, [handleSave, selectedStudentId, students]);
 
   // ── 실시간 요약 계산
   const summary = (() => {
-    let answered = 0, correct = 0, wrong = 0, blank = 0, guessed = 0, score = 0;
+    let correct = 0, wrong = 0, blank = 0, guessed = 0, score = 0;
     questions.forEach((q) => {
-      const form = answerMap[q.id];
-      if (!form) return;
+      const form = answerMap[q.id] ?? correctForm(q);
       if (form.is_blank) { blank++; return; }
-      if (!form.selected_answer.trim()) return;
-      answered++;
       if (form.is_guessed) guessed++;
       const { is_correct, earned_score } = computeResult(form, q.score);
       if (is_correct) { correct++; score += earned_score; }
       else wrong++;
     });
-    const unanswered = questions.length - answered - blank;
-    return { answered, correct, wrong, blank: blank + unanswered, guessed, score };
+    return { correct, wrong, blank, guessed, score };
   })();
 
   const totalScore = questions.reduce((s, q) => s + q.score, 0);
   const selectedStudent = students.find((s) => s.id === selectedStudentId);
   const noStudents  = students.length === 0;
   const noQuestions = questions.length === 0;
+  const quickQuestions = questions.filter((q) => {
+    const form = answerMap[q.id] ?? correctForm(q);
+    return form.is_blank || !form.is_correct || form.is_guessed;
+  });
+  const displayedQuestions = gradingMode === 'quick' ? quickQuestions : questions;
 
   // ─────────────────────────────────────────────
   // 렌더
@@ -413,7 +534,7 @@ export default function AnswersPage({
               size="sm"
               onClick={handleSaveAndNext}
               loading={saving}
-              disabled={saving}
+              disabled={saving || answersLoading}
             >
               저장 후 다음 학생 →
             </Button>
@@ -422,7 +543,7 @@ export default function AnswersPage({
               size="sm"
               onClick={handleSave}
               loading={saving}
-              disabled={saving}
+              disabled={saving || answersLoading}
             >
               <Save size={15} />
               {saveSuccess ? '저장됨 ✓' : '저장'}
@@ -565,6 +686,119 @@ export default function AnswersPage({
           {/* ── 선택된 학생 답안 입력 ── */}
           {selectedStudentId && (
             <>
+              {/* 채점 모드 */}
+              <div
+                className="rounded-xl border p-4 mb-4"
+                style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: 'var(--fg-main)' }}>채점 방식</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--fg-muted)' }}>
+                      빠른 채점은 오답과 미응답만 선택합니다.
+                    </p>
+                  </div>
+                  <div className="inline-flex rounded-lg border p-1" style={{ borderColor: 'var(--border)' }}>
+                    {([
+                      { value: 'quick' as const, label: '오답만 입력' },
+                      { value: 'detailed' as const, label: '전체 답안 입력' },
+                    ]).map((item) => {
+                      const selected = gradingMode === item.value;
+                      return (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => {
+                            setGradingMode(item.value);
+                            if (item.value === 'quick') syncQuickInputs(answerMap);
+                          }}
+                          className="rounded-md px-3 py-1.5 text-sm font-semibold transition-colors"
+                          style={{
+                            background: selected ? 'var(--accent)' : 'transparent',
+                            color: selected ? '#fff' : 'var(--fg-sub)',
+                          }}
+                        >
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {gradingMode === 'quick' && !answersLoading && (
+                <div className="grid gap-4 lg:grid-cols-2 mb-4">
+                  {([
+                    {
+                      kind: 'wrong' as const,
+                      title: '오답 문항',
+                      description: '쉼표 또는 공백으로 여러 번호를 입력할 수 있습니다.',
+                      value: wrongInput,
+                      error: wrongInputError,
+                      color: '#dc2626',
+                      selectedBg: '#fef2f2',
+                    },
+                    {
+                      kind: 'blank' as const,
+                      title: '미응답 문항',
+                      description: '오답과 구분하여 미응답 번호를 선택하세요.',
+                      value: blankInput,
+                      error: blankInputError,
+                      color: '#64748b',
+                      selectedBg: '#f1f5f9',
+                    },
+                  ]).map((section) => (
+                    <div
+                      key={section.kind}
+                      className="rounded-xl border p-4"
+                      style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
+                    >
+                      <label className="block text-sm font-semibold" style={{ color: 'var(--fg-main)' }}>
+                        {section.title}
+                      </label>
+                      <p className="text-xs mt-0.5 mb-2" style={{ color: 'var(--fg-muted)' }}>
+                        {section.description}
+                      </p>
+                      <input
+                        value={section.value}
+                        onChange={(event) => applyQuickInput(section.kind, event.target.value)}
+                        onBlur={() => syncQuickInputs(answerMap)}
+                        placeholder={section.kind === 'wrong' ? '예: 4, 7, 12, 18' : '예: 20'}
+                        className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                        style={{ borderColor: section.error ? '#dc2626' : 'var(--border)' }}
+                      />
+                      {section.error && (
+                        <p className="text-xs mt-1" style={{ color: '#dc2626' }}>{section.error}</p>
+                      )}
+                      <div className="flex flex-wrap gap-1.5 mt-3">
+                        {questions.map((question) => {
+                          const form = answerMap[question.id] ?? correctForm(question);
+                          const selected = section.kind === 'wrong'
+                            ? !form.is_correct && !form.is_blank
+                            : form.is_blank;
+                          return (
+                            <button
+                              key={question.id}
+                              type="button"
+                              onClick={() => setQuickStatus(question, selected ? 'correct' : section.kind)}
+                              className="h-8 min-w-8 rounded-lg border px-2 text-xs font-bold transition-colors"
+                              style={{
+                                background: selected ? section.selectedBg : '#fff',
+                                borderColor: selected ? section.color : 'var(--border)',
+                                color: selected ? section.color : 'var(--fg-sub)',
+                              }}
+                              aria-pressed={selected}
+                            >
+                              {question.question_number}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* 현재 학생 요약 카드 */}
               <div
                 className="rounded-xl border px-5 py-3 mb-4"
@@ -581,6 +815,9 @@ export default function AnswersPage({
                   </span>
 
                   <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+                    <span style={{ color: 'var(--fg-sub)' }}>
+                      총 <strong>{questions.length}</strong>문항
+                    </span>
                     <span style={{ color: '#16a34a' }}>
                       ✓ 정답 <strong>{summary.correct}</strong>개
                     </span>
@@ -594,7 +831,7 @@ export default function AnswersPage({
                       🎲 찍음 <strong>{summary.guessed}</strong>개
                     </span>
                     <span className="font-semibold" style={{ color: 'var(--fg-main)' }}>
-                      현재 점수{' '}
+                      예상 점수{' '}
                       <strong style={{ color: 'var(--accent)' }}>
                         {formatScoreValue(summary.score)}
                       </strong>
@@ -617,6 +854,11 @@ export default function AnswersPage({
                     ✓ 저장 완료!
                   </p>
                 )}
+                {navigationMessage && (
+                  <p className="mt-2 text-sm font-medium" style={{ color: 'var(--fg-sub)' }}>
+                    {navigationMessage}
+                  </p>
+                )}
               </div>
 
               {/* 답안 입력 테이블 */}
@@ -625,10 +867,35 @@ export default function AnswersPage({
                   <Loader2 size={20} className="animate-spin" style={{ color: 'var(--fg-muted)' }} />
                 </div>
               ) : (
-                <div
-                  className="rounded-xl border overflow-hidden"
-                  style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
-                >
+                <div>
+                  {gradingMode === 'quick' && displayedQuestions.length === 0 && (
+                    <div
+                      className="rounded-xl border px-5 py-10 text-center mb-4"
+                      style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
+                    >
+                      <p className="text-sm font-semibold" style={{ color: '#16a34a' }}>
+                        모든 문항이 정답으로 선택되어 있습니다.
+                      </p>
+                      <p className="text-xs mt-1" style={{ color: 'var(--fg-muted)' }}>
+                        오답 또는 미응답 문항을 위에서 선택하면 상세 입력란이 표시됩니다.
+                      </p>
+                    </div>
+                  )}
+                  {displayedQuestions.length > 0 && (
+                  <div
+                    className="rounded-xl border overflow-hidden"
+                    style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
+                  >
+                    {gradingMode === 'quick' && (
+                      <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+                        <p className="text-sm font-semibold" style={{ color: 'var(--fg-main)' }}>
+                          오답·미응답·찍음 상세 입력
+                        </p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--fg-muted)' }}>
+                          학생 답안은 선택사항입니다. 오답 번호만 선택해도 저장할 수 있습니다.
+                        </p>
+                      </div>
+                    )}
                   <div className="overflow-x-auto">
                     <table
                       style={{ minWidth: 760, borderCollapse: 'collapse', width: '100%' }}
@@ -662,11 +929,10 @@ export default function AnswersPage({
                         </tr>
                       </thead>
                       <tbody>
-                        {questions.map((q, i) => {
-                          const form = answerMap[q.id] ?? defaultForm();
+                        {displayedQuestions.map((q, i) => {
+                          const form = answerMap[q.id] ?? correctForm(q);
                           const { is_correct, earned_score } = computeResult(form, q.score);
-                          const hasAnswer =
-                            !form.is_blank && form.selected_answer.trim() !== '';
+                          const hasAnswer = !form.is_blank;
                           const rowBg = i % 2 === 0 ? '#ffffff' : '#fafaf9';
 
                           return (
@@ -735,7 +1001,9 @@ export default function AnswersPage({
                                           onClick={() =>
                                             updateAnswer(q.id, {
                                               selected_answer: nextAnswer,
-                                              is_correct: nextAnswer !== '' && nextAnswer.trim() === (q.answer ?? '').trim(),
+                                              is_correct: gradingMode === 'quick'
+                                                ? false
+                                                : nextAnswer !== '' && nextAnswer.trim() === (q.answer ?? '').trim(),
                                               is_blank: false,
                                             })
                                           }
@@ -773,6 +1041,14 @@ export default function AnswersPage({
 
                               {/* 채점 결과 */}
                               <td className="px-3 py-2">
+                                {gradingMode === 'quick' ? (
+                                  <span
+                                    className="inline-flex rounded-lg px-3 py-1.5 text-xs font-bold text-white"
+                                    style={{ background: form.is_correct ? '#16a34a' : '#dc2626' }}
+                                  >
+                                    {form.is_correct ? 'O' : 'X'}
+                                  </span>
+                                ) : (
                                 <div className="inline-flex overflow-hidden rounded-lg border" style={{ borderColor: 'var(--border)' }}>
                                   {[
                                     { label: 'O', value: true, color: '#16a34a' },
@@ -797,6 +1073,7 @@ export default function AnswersPage({
                                     );
                                   })}
                                 </div>
+                                )}
                               </td>
 
                               {/* 찍음 */}
@@ -816,13 +1093,17 @@ export default function AnswersPage({
                                 <input
                                   type="checkbox"
                                   checked={form.is_blank}
-                                  onChange={(e) =>
+                                  onChange={(e) => {
+                                    if (gradingMode === 'quick') {
+                                      setQuickStatus(q, e.target.checked ? 'blank' : 'wrong');
+                                      return;
+                                    }
                                     updateAnswer(q.id, {
                                       is_blank: e.target.checked,
                                       selected_answer: e.target.checked ? '' : form.selected_answer,
                                       is_correct: e.target.checked ? false : form.is_correct,
-                                    })
-                                  }
+                                    });
+                                  }}
                                   className="w-4 h-4 cursor-pointer accent-orange-500"
                                 />
                               </td>
@@ -844,6 +1125,8 @@ export default function AnswersPage({
                     </table>
                   </div>
                 </div>
+                  )}
+                </div>
               )}
 
               {/* ── 하단 버튼 ── */}
@@ -864,12 +1147,18 @@ export default function AnswersPage({
                     </Button>
                   </Link>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col items-end gap-2">
+                  {gradingMode === 'quick' && (
+                    <p className="text-xs text-right" style={{ color: 'var(--fg-muted)' }}>
+                      오답 또는 미응답으로 선택하지 않은 문항은 모두 정답으로 저장됩니다.
+                    </p>
+                  )}
+                  <div className="flex gap-2">
                   <Button
                     variant="outline"
                     onClick={handleSaveAndNext}
                     loading={saving}
-                    disabled={saving}
+                    disabled={saving || answersLoading}
                   >
                     저장 후 다음 학생 →
                   </Button>
@@ -877,11 +1166,12 @@ export default function AnswersPage({
                     variant="accent"
                     onClick={handleSave}
                     loading={saving}
-                    disabled={saving}
+                    disabled={saving || answersLoading}
                   >
                     <Save size={15} />
                     {saveSuccess ? '저장됨 ✓' : '저장'}
                   </Button>
+                  </div>
                 </div>
               </div>
             </>
