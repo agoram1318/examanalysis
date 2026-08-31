@@ -111,6 +111,46 @@ function buildScorePlan(questions: QuestionForm[]): {
   };
 }
 
+function rebalanceScoresTo100(questions: QuestionForm[]): QuestionForm[] {
+  if (questions.length === 0) return questions;
+
+  const currentPlan = buildScorePlan(questions);
+  if (
+    currentPlan.invalidCount > 0 ||
+    (currentPlan.canAutoAllocate && currentPlan.resolvedTotal === 100)
+  ) {
+    return questions;
+  }
+
+  const parsedScores = questions.map(q => parseScore(q.score));
+  const validScores = parsedScores.filter((score): score is number => score !== null);
+  const validTotal = validScores.reduce((sum, score) => sum + score, 0);
+  const blankWeight = validScores.length > 0 ? validTotal / validScores.length : 1;
+  const weights = parsedScores.map(score => score ?? blankWeight);
+  const weightTotal = weights.reduce((sum, score) => sum + score, 0);
+
+  // 0.01점 단위로 비율 배분한 뒤 남는 오차를 소수점 잔여가 큰 문항부터 보정합니다.
+  const minimumCents = questions.length <= 10_000 ? 1 : 0;
+  const distributableCents = 10_000 - minimumCents * questions.length;
+  const exactAdditionalCents = weights.map(weight =>
+    weightTotal > 0 ? (weight / weightTotal) * distributableCents : 0
+  );
+  const scoreCents = exactAdditionalCents.map(value => minimumCents + Math.floor(value));
+  const remainingCents = 10_000 - scoreCents.reduce((sum, value) => sum + value, 0);
+  const remainderOrder = exactAdditionalCents
+    .map((value, index) => ({ index, remainder: value - Math.floor(value) }))
+    .sort((a, b) => b.remainder - a.remainder || a.index - b.index);
+
+  for (let i = 0; i < remainingCents; i++) {
+    scoreCents[remainderOrder[i % remainderOrder.length].index] += 1;
+  }
+
+  return questions.map((q, index) => ({
+    ...q,
+    score: formatScoreValue(scoreCents[index] / 100),
+  }));
+}
+
 function makeDefaultQuestion(num: number): QuestionForm {
   return {
     id: null,
@@ -539,7 +579,7 @@ export default function QuestionsPage({
   const addQuestion = useCallback(() => {
     setQuestions(qs => {
       const nextNumber = (qs.at(-1)?.question_number ?? 0) + 1;
-      return [...qs, makeDefaultQuestion(nextNumber)];
+      return rebalanceScoresTo100([...qs, makeDefaultQuestion(nextNumber)]);
     });
     setSaveError(null);
   }, []);
@@ -547,9 +587,10 @@ export default function QuestionsPage({
   const removeQuestion = useCallback((idx: number) => {
     setQuestions(qs => {
       if (qs.length <= 1) return qs;
-      return qs
+      const remainingQuestions = qs
         .filter((_, i) => i !== idx)
         .map((q, i) => ({ ...q, question_number: i + 1 }));
+      return rebalanceScoresTo100(remainingQuestions);
     });
     setSaveError(null);
   }, []);
