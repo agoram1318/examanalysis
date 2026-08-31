@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useState, use, useCallback } from 'react';
+import React, { useEffect, useState, use, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Save, AlertCircle, Loader2, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Save, AlertCircle, Loader2, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Button from '@/components/ui/Button';
 import { formatScoreValue, getSubjectDisplayName } from '@/lib/report-utils';
@@ -24,6 +24,8 @@ type MiddleUnit = { id: number; name: string; major_unit_id: number };
 type SmallUnit  = { id: number; name: string; middle_unit_id: number };
 
 type QuestionForm = {
+  id: number | null;
+  client_key: string;
   question_number: number;
   question_format: 'objective' | 'subjective';
   answer: string;
@@ -35,6 +37,8 @@ type QuestionForm = {
   difficulty: number | null;
   question_comment: string;
 };
+
+let newQuestionKey = 0;
 
 // ─────────────────────────────────────────────
 // 상수
@@ -109,6 +113,8 @@ function buildScorePlan(questions: QuestionForm[]): {
 
 function makeDefaultQuestion(num: number): QuestionForm {
   return {
+    id: null,
+    client_key: `new-question-${++newQuestionKey}`,
     question_number: num,
     question_format: 'objective',
     answer: '',
@@ -183,10 +189,12 @@ type RowProps = {
   allMiddles: MiddleUnit[];
   allSmalls: SmallUnit[];
   onChange: (idx: number, patch: Partial<QuestionForm>) => void;
+  onRemove: (idx: number) => void;
+  canRemove: boolean;
 };
 
 const QuestionRow = React.memo(function QuestionRow({
-  q, idx, autoScore, subjects, majorUnits, allMiddles, allSmalls, onChange,
+  q, idx, autoScore, subjects, majorUnits, allMiddles, allSmalls, onChange, onRemove, canRemove,
 }: RowProps) {
   const filteredMajors = q.subject_id
     ? majorUnits.filter(m => m.subject_id === q.subject_id)
@@ -206,6 +214,21 @@ const QuestionRow = React.memo(function QuestionRow({
         >
           {q.question_number}
         </span>
+      </td>
+
+      {/* 삭제 */}
+      <td className="px-3 py-2 text-center">
+        <button
+          type="button"
+          onClick={() => onRemove(idx)}
+          disabled={!canRemove}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-30"
+          style={{ borderColor: 'var(--border)', color: '#dc2626' }}
+          aria-label={`${q.question_number}번 문항 삭제`}
+          title={canRemove ? `${q.question_number}번 문항 삭제` : '문항은 최소 1개 이상이어야 합니다.'}
+        >
+          <Trash2 size={14} />
+        </button>
       </td>
 
       {/* 정답 */}
@@ -376,6 +399,7 @@ const QuestionRow = React.memo(function QuestionRow({
           onChange={e => onChange(idx, { question_comment: e.target.value })}
         />
       </td>
+
     </tr>
   );
 });
@@ -390,6 +414,7 @@ export default function QuestionsPage({
 }) {
   const { id: testIdStr } = use(params);
   const testId = Number(testIdStr);
+  const invalidTestId = Number.isNaN(testId);
   const router = useRouter();
 
   const [test, setTest]           = useState<TestRow | null>(null);
@@ -398,6 +423,8 @@ export default function QuestionsPage({
   const [allMiddles, setAllMiddles] = useState<MiddleUnit[]>([]);
   const [allSmalls, setAllSmalls]   = useState<SmallUnit[]>([]);
   const [questions, setQuestions]   = useState<QuestionForm[]>([]);
+  const originalQuestionIds = useRef<number[]>([]);
+  const originalQuestionNumbers = useRef<Map<number, number>>(new Map());
 
   const [loading, setLoading]     = useState(true);
   const [notFound, setNotFound]   = useState(false);
@@ -406,11 +433,7 @@ export default function QuestionsPage({
 
   // ── 데이터 로드
   useEffect(() => {
-    if (isNaN(testId)) {
-      setNotFound(true);
-      setLoading(false);
-      return;
-    }
+    if (invalidTestId) return;
 
     async function load() {
       // 1. 테스트 정보
@@ -444,15 +467,21 @@ export default function QuestionsPage({
       const { data: existingQs } = await supabase
         .from('questions')
         .select(
-          'question_number, question_format, answer, score, subject_id, major_unit_id, middle_unit_id, small_unit_id, difficulty, question_comment'
+          'id, question_number, question_format, answer, score, subject_id, major_unit_id, middle_unit_id, small_unit_id, difficulty, question_comment'
         )
         .eq('test_id', testId)
         .order('question_number');
 
       if (existingQs && existingQs.length > 0) {
+        originalQuestionIds.current = existingQs.map(q => q.id);
+        originalQuestionNumbers.current = new Map(
+          existingQs.map(q => [q.id, q.question_number])
+        );
         setQuestions(
-          existingQs.map(q => ({
-            question_number: q.question_number,
+          existingQs.map((q, index) => ({
+            id:               q.id,
+            client_key:       `saved-question-${q.id}`,
+            question_number: index + 1,
             question_format: (q.question_format === 'subjective' ? 'subjective' : 'objective') as QuestionForm['question_format'],
             answer:          q.answer ?? '',
             score:           q.score === null || q.score === undefined ? '' : String(Number(q.score)),
@@ -465,6 +494,8 @@ export default function QuestionsPage({
           }))
         );
       } else {
+        originalQuestionIds.current = [];
+        originalQuestionNumbers.current = new Map();
         setQuestions(
           Array.from({ length: testData.total_questions }, (_, i) =>
             makeDefaultQuestion(i + 1)
@@ -476,7 +507,7 @@ export default function QuestionsPage({
     }
 
     load();
-  }, [testId]);
+  }, [testId, invalidTestId]);
 
   // ── 문항 업데이트 (상위 단원 변경 시 하위 초기화 포함)
   const updateQuestion = useCallback(
@@ -504,9 +535,33 @@ export default function QuestionsPage({
     []
   );
 
-  // ── 저장 (DELETE → INSERT 방식)
+  // ── 문항 추가/삭제 (저장 전까지는 화면 상태에만 반영)
+  const addQuestion = useCallback(() => {
+    setQuestions(qs => {
+      const nextNumber = (qs.at(-1)?.question_number ?? 0) + 1;
+      return [...qs, makeDefaultQuestion(nextNumber)];
+    });
+    setSaveError(null);
+  }, []);
+
+  const removeQuestion = useCallback((idx: number) => {
+    setQuestions(qs => {
+      if (qs.length <= 1) return qs;
+      return qs
+        .filter((_, i) => i !== idx)
+        .map((q, i) => ({ ...q, question_number: i + 1 }));
+    });
+    setSaveError(null);
+  }, []);
+
+  // ── 저장 (삭제된 문항만 제거하고 기존 문항 ID는 유지)
   const handleSave = async () => {
     setSaveError(null);
+
+    if (questions.length === 0) {
+      setSaveError('문항은 최소 1개 이상이어야 합니다.');
+      return;
+    }
 
     const allEmpty = questions.every(q => !q.answer.trim());
     if (allEmpty) {
@@ -526,20 +581,10 @@ export default function QuestionsPage({
 
     setSaving(true);
 
-    const { error: delErr } = await supabase
-      .from('questions')
-      .delete()
-      .eq('test_id', testId);
-
-    if (delErr) {
-      setSaveError(`기존 데이터 삭제 실패: ${delErr.message}`);
-      setSaving(false);
-      return;
-    }
-
     const rows = questions.map((q, index) => ({
+      id:              q.id,
       test_id:         testId,
-      question_number: q.question_number,
+      question_number: index + 1,
       question_format: q.question_format,
       answer:          q.answer.trim() || null,
       score:           scorePlan.resolvedScores[index],
@@ -551,13 +596,126 @@ export default function QuestionsPage({
       question_comment: q.question_comment.trim() || null,
     }));
 
-    const { error: insErr } = await supabase.from('questions').insert(rows);
+    const retainedIds = new Set(
+      rows.map(row => row.id).filter((id): id is number => id !== null)
+    );
+    const deletedIds = originalQuestionIds.current.filter(id => !retainedIds.has(id));
 
-    if (insErr) {
-      setSaveError(`저장 실패: ${insErr.message}`);
+    // 삭제를 먼저 처리하면 뒤 문항 번호를 당길 때 UNIQUE(test_id, question_number) 충돌이 나지 않습니다.
+    if (deletedIds.length > 0) {
+      const { error: delErr } = await supabase
+        .from('questions')
+        .delete()
+        .eq('test_id', testId)
+        .in('id', deletedIds);
+
+      if (delErr) {
+        setSaveError(`문항 삭제 실패: ${delErr.message}`);
+        setSaving(false);
+        return;
+      }
+    }
+
+    const existingRows = rows.filter(
+      (row): row is typeof row & { id: number } => row.id !== null
+    );
+    const needsRenumber = existingRows.some(
+      row => originalQuestionNumbers.current.get(row.id) !== row.question_number
+    );
+
+    // 번호가 당겨지는 경우 현재 범위 밖의 임시 번호를 거쳐 UNIQUE(test_id, question_number) 충돌을 피합니다.
+    if (needsRenumber && existingRows.length > 0) {
+      const temporaryNumberStart = Math.max(
+        ...existingRows.map(row => row.question_number),
+        ...originalQuestionNumbers.current.values()
+      ) + 1;
+      const temporaryRows = existingRows.map((row, index) => ({
+        ...row,
+        question_number: temporaryNumberStart + index,
+      }));
+      const { error: temporaryUpdateErr } = await supabase
+        .from('questions')
+        .upsert(temporaryRows, { onConflict: 'id' });
+
+      if (temporaryUpdateErr) {
+        setSaveError(`문항 번호 정리 실패: ${temporaryUpdateErr.message}`);
+        setSaving(false);
+        return;
+      }
+    }
+
+    if (existingRows.length > 0) {
+      const { error: updateErr } = await supabase
+        .from('questions')
+        .upsert(existingRows, { onConflict: 'id' });
+
+      if (updateErr) {
+        setSaveError(`문항 저장 실패: ${updateErr.message}`);
+        setSaving(false);
+        return;
+      }
+    }
+
+    const newRows = rows
+      .filter(row => row.id === null)
+      .map(row => ({
+        test_id: row.test_id,
+        question_number: row.question_number,
+        question_format: row.question_format,
+        answer: row.answer,
+        score: row.score,
+        subject_id: row.subject_id,
+        major_unit_id: row.major_unit_id,
+        middle_unit_id: row.middle_unit_id,
+        small_unit_id: row.small_unit_id,
+        difficulty: row.difficulty,
+        question_comment: row.question_comment,
+      }));
+
+    let savedQuestions = questions;
+    if (newRows.length > 0) {
+      const { data: insertedRows, error: insertErr } = await supabase
+        .from('questions')
+        .insert(newRows)
+        .select('id, question_number');
+
+      if (insertErr) {
+        setSaveError(`새 문항 추가 실패: ${insertErr.message}`);
+        setSaving(false);
+        return;
+      }
+
+      const insertedIdByNumber = new Map(
+        (insertedRows ?? []).map(row => [row.question_number, row.id])
+      );
+      savedQuestions = questions.map((q, index) => {
+        if (q.id !== null) return { ...q, question_number: index + 1 };
+        return {
+          ...q,
+          id: insertedIdByNumber.get(index + 1) ?? null,
+          question_number: index + 1,
+        };
+      });
+      setQuestions(savedQuestions);
+    }
+
+    const { error: testUpdateErr } = await supabase
+      .from('tests')
+      .update({ total_questions: questions.length })
+      .eq('id', testId);
+
+    if (testUpdateErr) {
+      setSaveError(`총 문항 수 저장 실패: ${testUpdateErr.message}`);
       setSaving(false);
       return;
     }
+
+    originalQuestionIds.current = savedQuestions
+      .map(q => q.id)
+      .filter((id): id is number => id !== null);
+    originalQuestionNumbers.current = new Map(
+      savedQuestions.flatMap((q, index) => q.id === null ? [] : [[q.id, index + 1]])
+    );
 
     router.push(`/tests/${testId}/classes/new`);
   };
@@ -566,7 +724,7 @@ export default function QuestionsPage({
   const totalScore = scorePlan.resolvedTotal;
 
   // ── 로딩
-  if (loading) {
+  if (loading && !invalidTestId) {
     return (
       <div className="flex items-center justify-center py-32">
         <Loader2 size={24} className="animate-spin" style={{ color: 'var(--fg-muted)' }} />
@@ -575,7 +733,7 @@ export default function QuestionsPage({
   }
 
   // ── 없음
-  if (notFound || !test) {
+  if (invalidTestId || notFound || !test) {
     return (
       <div className="max-w-md mx-auto py-20 text-center">
         <AlertCircle size={40} className="mx-auto mb-3 opacity-30" style={{ color: 'var(--fg-muted)' }} />
@@ -643,7 +801,7 @@ export default function QuestionsPage({
         {[
           { label: '테스트명', value: test.title },
           { label: '학년',    value: test.grade || '–' },
-          { label: '총 문항', value: `${test.total_questions}문항` },
+          { label: '총 문항', value: `${questions.length}문항` },
           { label: '배점 합계', value: `${formatScoreFixed(totalScore)}점${scorePlan.blankCount > 0 ? ' (예상)' : ''}` },
         ].map(item => (
           <div key={item.label} className="flex items-center gap-2 text-sm">
@@ -703,17 +861,29 @@ export default function QuestionsPage({
           <span className="text-sm font-semibold" style={{ color: 'var(--fg-main)' }}>
             문항별 정보 입력
           </span>
-          <span className="text-xs" style={{ color: 'var(--fg-muted)' }}>
-            가로 스크롤로 전체 열을 확인하세요.
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs" style={{ color: 'var(--fg-muted)' }}>
+              추가·삭제 내용은 저장 시 반영됩니다.
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addQuestion}
+              disabled={saving}
+            >
+              <Plus size={14} /> 문항 추가
+            </Button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table style={{ minWidth: 1220, borderCollapse: 'collapse', width: '100%' }}>
+          <table style={{ minWidth: 1300, borderCollapse: 'collapse', width: '100%' }}>
             <thead style={{ background: 'var(--bg-base)' }}>
               <tr>
                 {[
                   { label: '번호',      w: 56  },
+                  { label: '삭제',      w: 64  },
                   { label: '문항 형식', w: 112 },
                   { label: '정답',      w: 88  },
                   { label: '배점',      w: 72  },
@@ -742,7 +912,7 @@ export default function QuestionsPage({
             <tbody>
               {questions.map((q, idx) => (
                 <QuestionRow
-                  key={q.question_number}
+                  key={q.client_key}
                   q={q}
                   idx={idx}
                   autoScore={scorePlan.autoScores[idx]}
@@ -751,10 +921,26 @@ export default function QuestionsPage({
                   allMiddles={allMiddles}
                   allSmalls={allSmalls}
                   onChange={updateQuestion}
+                  onRemove={removeQuestion}
+                  canRemove={questions.length > 1 && !saving}
                 />
               ))}
             </tbody>
           </table>
+        </div>
+        <div
+          className="flex justify-center border-t px-5 py-3"
+          style={{ borderColor: 'var(--border)', background: 'var(--bg-base)' }}
+        >
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addQuestion}
+            disabled={saving}
+          >
+            <Plus size={14} /> 문항 추가
+          </Button>
         </div>
       </div>
 
